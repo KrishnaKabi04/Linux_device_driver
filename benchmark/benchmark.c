@@ -109,9 +109,6 @@ int main(int argc, char *argv[])
   printf("KK address of b[0]: %lld \n", &b[0]);
   printf("KK value of b pointer: %f \n", *b);
 
-  float * z= a;
-
-  printf("z value: %f, %f, %f, %f, %f \n \n", *z, z[0], z[1], z[2], *(z+5));
   
   // Accelerated BLOCKMM
   blockmma(devfd, a, b, c, ARRAY_SIZE, ARRAY_SIZE, ARRAY_SIZE);
