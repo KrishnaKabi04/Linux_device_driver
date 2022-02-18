@@ -103,7 +103,9 @@ long my_ioctl(struct file *file, unsigned cmd, unsigned long arg){
 */
 // end : Krishna
 
+#define mem_size 128
 static int buffer_a[128];
+float *kernel_buffer;
 
 long blockmma_send_task(struct blockmma_cmd __user *user_cmd) //write data from user - to driver
 {
@@ -112,23 +114,15 @@ long blockmma_send_task(struct blockmma_cmd __user *user_cmd) //write data from 
 	// target memory address, size of I/O transfer etc.. 
 	// probably wake up by interrupt ? 
 
-	struct task_struct *p = current;	
-	int st= p->state; /* -1 unrunnable, 0 runnable, >0 stopped */
+	struct task_struct *p = current;
+	struct 	blockmma_cmd *test= user_cmd;
+	int st= p->state; /* 0 runnable, 1 interruptible, 2 un-interruptible, 4 stopped, 64 dead, 256 waking */
 	printk("Process accessing: %s and PID is %i", current->comm, current->pid);
 	printk("state is: %d", st);
-	printk("PID in send task is: %d",p->pid);
+	printk("PID in send task is: %d, tgid: %d",p->pid, p->tgid);
 	
-	//struct mm_struct mm_ex;
-	//access fields from user_cmd:
-
-	printk("cmd op: %d", user_cmd->op);
-	printk("cmd tid: %d", user_cmd->tid);
-	printk("cmd a: %p, b: %p, c: %p", user_cmd->a, user_cmd->b, user_cmd->c);
-	printk("cmd M: %d, N: %d, K: %d", user_cmd->m, user_cmd->n, user_cmd->k);
-	
-	struct page *page;
-	//copy_from_user(&cmd, user_cmd, sizeof(cmd)))
-    
+	int val = (int) (long) user_cmd->a;
+	printk("access usercmd: %lld", val);
 	return 0;
 }
 

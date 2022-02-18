@@ -42,8 +42,7 @@ int blockmma(int devfd, float *a, float *b, float *c, int M, int N, int K)
       {
         blockmma_f128(devfd, &a[i*N+j], &b[j*K+k], &c[i*K+k], M, N, K, 128); //0 0 0 
                                                                               //0 128 [0 128 256 ...] 
-        printf("Exiting process!!");
-        exit(0);
+
       }
       blockmma_sync(devfd); //copy data back to user-space ? free memory
     }

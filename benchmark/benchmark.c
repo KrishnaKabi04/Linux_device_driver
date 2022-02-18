@@ -61,6 +61,7 @@ int main(int argc, char *argv[])
     time_t t;
     int ARRAY_SIZE = 256;
     int pagesize = sysconf(_SC_PAGE_SIZE);
+    printf("Page size is : %d", pagesize);
     pid_t ppid_before_fork = getpid();
     // takes arguments from command line interface.
     devfd = open("/dev/blockmma", O_RDWR);
