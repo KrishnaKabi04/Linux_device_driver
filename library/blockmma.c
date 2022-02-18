@@ -62,7 +62,6 @@ int blockmma(int devfd, float *a, float *b, float *c, int M, int N, int K)
                                                                               //0 128 [0 128 256 ...] 
         
       }
-      exit(0);
       blockmma_sync(devfd); //copy data back to user-space ? free memory
     }
   }  
@@ -90,7 +89,7 @@ int blockmma_bonus(int devfd, float *a, float *b, float *c, int M, int N, int K)
 
 int blockmma_f128(int devfd, float *a, float *b, float *c, int m, int n, int k, int tile)
 {
-
+    
     printf("----------- blockmma_f128 --------- \n");
     printf("----------- matrix A --------- \n");
     printf("value of a[0]: %f \n", a[0]);
@@ -143,7 +142,6 @@ int blockmma_f128(int devfd, float *a, float *b, float *c, int m, int n, int k, 
     //printf("size of a: %ld \n", sizeof(cmd.a));
     //printf("size of a: %ld \n", sizeof(a));
 
-    return (0);
     while(ioctl(devfd, BLOCKMMA_IOCTL_SEND_TASK, &cmd)== -1); // the ioctl func needs to return an exit code to break loop on success
     printf(" break loop in blockmma_f128");
     return 0;

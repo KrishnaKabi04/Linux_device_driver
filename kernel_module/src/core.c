@@ -103,10 +103,7 @@ long my_ioctl(struct file *file, unsigned cmd, unsigned long arg){
 */
 // end : Krishna
 
-#define mem_size 128
-static int buffer_a[128];
-float *kernel_buffer;
-
+void *kernel_buffer;
 
 long blockmma_send_task(struct blockmma_cmd __user *user_cmd) //write data from user - to driver
 {
@@ -116,37 +113,36 @@ long blockmma_send_task(struct blockmma_cmd __user *user_cmd) //write data from 
 	// probably wake up by interrupt ? 
 
 	struct task_struct *p = current;
-	struct 	blockmma_cmd *test= user_cmd;
 	int st= p->state; /* 0 runnable, 1 interruptible, 2 un-interruptible, 4 stopped, 64 dead, 256 waking */
 	printk("Process accessing: %s and PID is %i \n", current->comm, current->pid);
 	printk("state is: %d \n", st);
 	printk("PID in send task is: %d, tgid: %d \n",p->pid, p->tgid);
 	
 	//user copy_from_user to copy the user_cmd to kernel space
-	struct blockmma_cmd *kernel_cmd;
+	struct blockmma_cmd kernel_cmd;
+	int res= copy_from_user(&kernel_cmd, user_cmd, sizeof(kernel_cmd)); //handle error
+	printk("res: %d", res);
+
+	printk("cmd address of a : %lld, address of b: %lld, tile: %d \n", kernel_cmd.a, kernel_cmd.b, kernel_cmd.tile);
+
 	//access_ok(arg, cmd)
+	/*Creating Physical memory using kmalloc()*/
+	size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(float); //allocate 1024 bytes
+	printk("size allocated: %lu bytes ", mat_size);
 
-	int res= copy_from_user(&kernel_cmd, user_cmd, sizeof(kernel_cmd));
-	printk("res: %d", res);
-	res= copy_from_user(&kernel_cmd, user_cmd, sizeof(kernel_cmd));
-	printk("res: %d", res);
-	printk("copied!! \n");
-	
-	//access field
-	//unsigned long val = (unsigned long) kernel_cmd->a;
-	//printk("%lld", kernel_cmd);
-	uint64_t temp = &kernel_cmd->a;
-	printk("cmd a: %llu \n", &kernel_cmd->a);
-	printk("cmd b: %llu \n", &kernel_cmd->b);
-	printk("cmd c: %llu \n", &kernel_cmd->c);
+	kernel_buffer = kmalloc(mat_size , GFP_KERNEL);
 
-	printk("cmd M: %llu \n", &kernel_cmd->m);
-	printk("cmd N: %llu \n", &kernel_cmd->n);
-	printk("cmd k: %llu \n", &kernel_cmd->n);
-	printk("cmd Tile: %llu \n", &kernel_cmd->tile);
+	if(kernel_buffer == 0){
+            printk(KERN_INFO "Cannot allocate memory in kernel\n");
+            return -1;
+    }
 
-	printk("temp: %llu", temp);
-	printk("%p", &kernel_cmd->*a);
+	printk("I got: %zu bytes of memory\n", ksize(kernel_buffer));
+
+	//release memory
+	kfree(kernel_buffer); 
+	printk("Memory released! ");
+	printk("______________________________________________\n");
 
 	return 0;
 }
