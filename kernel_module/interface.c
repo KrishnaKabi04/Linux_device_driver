@@ -45,29 +45,42 @@
 #include <linux/mutex.h>
 
 extern long blockmma_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
+extern int driver_open(struct inode *device_file, struct file *instance);
+extern int driver_close(struct inode *device_file, struct file *instance);
+//extern long my_ioctl(struct file *file, unsigned cmd, unsigned long arg);
+
 //extern int blockmma_mmap(struct file *filp, struct vm_area_struct *vma);
 extern int blockmma_init(void);
 extern void blockmma_exit(void);
 
+
 static const struct file_operations blockmma_fops = {
-    .owner                = THIS_MODULE,
-    .unlocked_ioctl       = blockmma_ioctl,
-//    .mmap                 = blockmma_mmap,
+    .owner = THIS_MODULE, //This field is used to prevent the module from being unloaded while its operations are in use.
+    .open = driver_open,
+	.release = driver_close,
+    //.unlocked_ioctl = my_ioctl,
+    .unlocked_ioctl = blockmma_ioctl, //to get device specific commands. 
+                                     // This field is used to prevent the module from being unloaded while its operations are in use.
+
+//    .mmap = blockmma_mmap,
 };
 
 struct miscdevice blockmma_dev = {
-    .minor = MISC_DYNAMIC_MINOR,
+    .minor = MISC_DYNAMIC_MINOR, //dynamic creation
     .name = "blockmma",
     .fops = &blockmma_fops,
+    // struct miscdevice *next, *prev;
 };
 
 static int __init blockmma_module_init(void)
 {
+    printk("Device file blockmma initialized");
     return blockmma_init();
 }
 
 static void __exit blockmma_module_exit(void)
 {
+    printk("Device file blockmma exiting");
     blockmma_exit();
 }
 

@@ -95,6 +95,7 @@ int main(int argc, char *argv[])
   memcpy(validate_a, a, ARRAY_SIZE*ARRAY_SIZE*sizeof(float *));
   memcpy(validate_b, b, ARRAY_SIZE*ARRAY_SIZE*sizeof(float *));
   memcpy(validate_c, c, ARRAY_SIZE*ARRAY_SIZE*sizeof(float *));
+  
   // Accelerated BLOCKMM
   blockmma(devfd, a, b, c, ARRAY_SIZE, ARRAY_SIZE, ARRAY_SIZE);
 
@@ -116,6 +117,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
+//CPU call
 int blockmm(float *a, float *b, float *c, int M, int N, int K)
 {
   int i,j,k, ii, jj, kk;

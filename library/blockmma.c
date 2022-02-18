@@ -33,16 +33,19 @@
 // This function submit tasks to the kernel module.
 int blockmma(int devfd, float *a, float *b, float *c, int M, int N, int K)
 {
-  int i, j, k;
+  int i, j, k;  
   for(i = 0; i < M; i+=128)
   {
     for(j = 0; j < N; j+=128)
     {
       for(k = 0; k < K; k+=128)
       {
-        blockmma_f128(devfd, &a[i*N+j], &b[j*K+k], &c[i*K+k], M, N, K, 128);
+        blockmma_f128(devfd, &a[i*N+j], &b[j*K+k], &c[i*K+k], M, N, K, 128); //0 0 0 
+                                                                              //0 128 [0 128 256 ...] 
+        printf("Exiting process!!");
+        exit(0);
       }
-      blockmma_sync(devfd);
+      blockmma_sync(devfd); //copy data back to user-space ? free memory
     }
   }  
 
@@ -78,7 +81,8 @@ int blockmma_f128(int devfd, float *a, float *b, float *c, int m, int n, int k, 
     cmd.n = (__u64)n;
     cmd.k = (__u64)k;
     cmd.tile = (__u64)tile;
-    while(ioctl(devfd, BLOCKMMA_IOCTL_SEND_TASK, &cmd)== -1);
+    while(ioctl(devfd, BLOCKMMA_IOCTL_SEND_TASK, &cmd)== -1); // the ioctl func needs to return an exit code to break loop on success
+    printf(" break loop in blockmma_f128");
     return 0;
 }
 
@@ -88,7 +92,7 @@ int blockmma_sync(int devfd)
 {
     struct blockmma_cmd cmd;
     cmd.op = (__u64)0;
-    while(ioctl(devfd, BLOCKMMA_IOCTL_SYNC, &cmd) == -1);
+    while(ioctl(devfd, BLOCKMMA_IOCTL_SYNC, &cmd) == -1); //break loop
     return 0;
 }
 
@@ -103,22 +107,23 @@ int blockmma_f128_accelerator(int devfd)
     float *a, *b, *c;
     int i, j, k;
     int tid;
-    a = (float *)malloc(128*128*sizeof(float));
-    b = (float *)malloc(128*128*sizeof(float));
-    c = (float *)malloc(128*128*sizeof(float));
+    a = (float *)malloc(128*128*sizeof(float)); //VMem 
+    b = (float *)malloc(128*128*sizeof(float)); //VMem
+    c = (float *)malloc(128*128*sizeof(float)); //VMem
     cmd.op = (__u64)0;
     cmd.a = (__u64)a;
     cmd.b = (__u64)b;
     cmd.c = (__u64)c;
-    signal(SIGQUIT, sigquit);
+    signal(SIGQUIT, sigquit); //terminate a  process
+
     while(1)
     {
-        if((tid=ioctl(devfd, BLOCKMMA_IOCTL_GET_TASK, &cmd))>=0)
+        if((tid=ioctl(devfd, BLOCKMMA_IOCTL_GET_TASK, &cmd))>=0) //makes sure data is mapped to .. 
         {
             for(i = 0; i < 128; i++)
                 for(j = 0; j < 128; j++)
                     for(k = 0; k < 128; k++)
-                        c[i*128+j] += a[i*128+k]*b[k*128+j];
+                        c[i*128+j] += a[i*128+k]*b[k*128+j]; 
             cmd.tid = tid;
             ioctl(devfd, BLOCKMMA_IOCTL_COMP, &cmd);
             counter++;

@@ -76,6 +76,7 @@ int main(int argc, char *argv[])
     pid_t ppid_before_fork = getpid();
     int recvSize;
     int pagesize = sysconf(_SC_PAGE_SIZE);
+    printf("Page size is : %d", pagesize);
     num_of_accelerators = atoi(argv[1]);
     devfd = open("/dev/blockmma", O_RDWR);
     if (devfd < 0)
@@ -83,7 +84,9 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Device open failed");
         exit(1);
     }
-    authors = (char *)memalign(pagesize, pagesize);
+    authors = (char *)memalign(pagesize, pagesize); // function returns a block of memory of size bytes aligned to blocksize. 
+                                                    //The blocksize must be given as a power of two. It sets errno and 
+                                                    //returns a null pointer upon failure.
     cmd.op = (__u64)0;
     cmd.a = (__u64)authors;
     

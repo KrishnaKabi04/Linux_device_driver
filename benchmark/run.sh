@@ -31,7 +31,8 @@ sleep 5
 # Multiple accelerators, single process
 # Launch an accelerator
 
-./accelerators 4 &
+./accelerators 1 &
+./benchmark 128
 ./benchmark 256 
 ./benchmark 512
 ./benchmark 1024
