@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
     time_t t;
     int ARRAY_SIZE = 256;
     int pagesize = sysconf(_SC_PAGE_SIZE);
-    printf("Page size is : %d", pagesize);
+    printf("Page size is : %d \n", pagesize);
     pid_t ppid_before_fork = getpid();
     // takes arguments from command line interface.
     devfd = open("/dev/blockmma", O_RDWR);
@@ -96,6 +96,22 @@ int main(int argc, char *argv[])
   memcpy(validate_a, a, ARRAY_SIZE*ARRAY_SIZE*sizeof(float *));
   memcpy(validate_b, b, ARRAY_SIZE*ARRAY_SIZE*sizeof(float *));
   memcpy(validate_c, c, ARRAY_SIZE*ARRAY_SIZE*sizeof(float *));
+  
+  printf("KK a[0]: %f \n", a[0]);
+  printf("KK a[1]: %f \n", a[1]);
+    printf("KK a[5]: %f \n", a[5]);
+  printf("KK address of a[0]: %lld , pointer: %p \n", &a[0],  &a[0]);
+  printf("KK: add a[1] %lld , pointer: %p \n", &a[1], &a[1]);
+  printf("KK: add of a  %lld, %p, value of a: %f \n", &a, &a, *a);
+
+
+  printf("KK value of b[0]: %f \n", b[0]);
+  printf("KK address of b[0]: %lld \n", &b[0]);
+  printf("KK value of b pointer: %f \n", *b);
+
+  float * z= a;
+
+  printf("z value: %f, %f, %f, %f, %f \n \n", *z, z[0], z[1], z[2], *(z+5));
   
   // Accelerated BLOCKMM
   blockmma(devfd, a, b, c, ARRAY_SIZE, ARRAY_SIZE, ARRAY_SIZE);

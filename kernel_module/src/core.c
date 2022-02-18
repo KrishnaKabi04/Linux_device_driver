@@ -107,6 +107,7 @@ long my_ioctl(struct file *file, unsigned cmd, unsigned long arg){
 static int buffer_a[128];
 float *kernel_buffer;
 
+
 long blockmma_send_task(struct blockmma_cmd __user *user_cmd) //write data from user - to driver
 {
 	//allocate memory for a acclerator
@@ -117,12 +118,36 @@ long blockmma_send_task(struct blockmma_cmd __user *user_cmd) //write data from 
 	struct task_struct *p = current;
 	struct 	blockmma_cmd *test= user_cmd;
 	int st= p->state; /* 0 runnable, 1 interruptible, 2 un-interruptible, 4 stopped, 64 dead, 256 waking */
-	printk("Process accessing: %s and PID is %i", current->comm, current->pid);
-	printk("state is: %d", st);
-	printk("PID in send task is: %d, tgid: %d",p->pid, p->tgid);
+	printk("Process accessing: %s and PID is %i \n", current->comm, current->pid);
+	printk("state is: %d \n", st);
+	printk("PID in send task is: %d, tgid: %d \n",p->pid, p->tgid);
 	
-	int val = (int) (long) user_cmd->a;
-	printk("access usercmd: %lld", val);
+	//user copy_from_user to copy the user_cmd to kernel space
+	struct blockmma_cmd *kernel_cmd;
+	//access_ok(arg, cmd)
+
+	int res= copy_from_user(&kernel_cmd, user_cmd, sizeof(kernel_cmd));
+	printk("res: %d", res);
+	res= copy_from_user(&kernel_cmd, user_cmd, sizeof(kernel_cmd));
+	printk("res: %d", res);
+	printk("copied!! \n");
+	
+	//access field
+	//unsigned long val = (unsigned long) kernel_cmd->a;
+	//printk("%lld", kernel_cmd);
+	uint64_t temp = &kernel_cmd->a;
+	printk("cmd a: %llu \n", &kernel_cmd->a);
+	printk("cmd b: %llu \n", &kernel_cmd->b);
+	printk("cmd c: %llu \n", &kernel_cmd->c);
+
+	printk("cmd M: %llu \n", &kernel_cmd->m);
+	printk("cmd N: %llu \n", &kernel_cmd->n);
+	printk("cmd k: %llu \n", &kernel_cmd->n);
+	printk("cmd Tile: %llu \n", &kernel_cmd->tile);
+
+	printk("temp: %llu", temp);
+	printk("%p", &kernel_cmd->*a);
+
 	return 0;
 }
 
