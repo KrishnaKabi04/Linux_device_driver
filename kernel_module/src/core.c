@@ -53,15 +53,6 @@ extern struct miscdevice blockmma_dev; //declared in interface.c
 
 
 // code : Krishna
-/*
-extern struct mystruct{
-	int repeat;
-	char name[64];
-};
-
-#define WR_VALUE _IOW('a', 'a', int32_t *)
-#define RD_VALUE _IOR('a', 'b', int32_t *)
-#define GREETER  _IOW('a', 'c', struct mystruct *)
 */
 int driver_open(struct inode *device_file, struct file *instance) {
 	printk("ioctl_example - blockmma file open was called!\n");
@@ -72,39 +63,12 @@ int driver_close(struct inode *device_file, struct file *instance) {
 	printk("ioctl_example - blockmma file close was called!\n");
 	return 0;
 }
-/*
-int32_t answer = 42;
 
-long my_ioctl(struct file *file, unsigned cmd, unsigned long arg){
-	struct mystruct test;
-
-	switch(cmd){
-		case WR_VALUE:
-			if(copy_from_user(&answer, (int32_t *) arg, sizeof(answer))) 
-				printk("ioctl_example - Error copying data from user!\n");
-			else
-				printk("ioctl_example - Update the answer to %d\n", answer);
-			break;
-		case RD_VALUE:
-			if(copy_to_user((int32_t *) arg, &answer, sizeof(answer))) 
-				printk("ioctl_example - Error copying data to user!\n");
-			else
-				printk("ioctl_example - The answer was copied!\n");
-			break;
-		case GREETER:
-			if(copy_from_user(&test, (struct mystruct *) arg, sizeof(test))) 
-				printk("ioctl_example - Error copying data from user!\n");
-			else
-				printk("ioctl_example - %d greets to %s\n", test.repeat, test.name);
-			break;
-	}
-	return 0;
-}
-*/
 // end : Krishna
 
-void *kernel_buffer;
-
+//queue has to be global
+int  *mat_a_mem, *mat_b_mem, *mat_c_mem;
+static struct blockmma_cmd kernel_cmd;
 long blockmma_send_task(struct blockmma_cmd __user *user_cmd) //write data from user - to driver
 {
 	//allocate memory for a acclerator
@@ -113,36 +77,46 @@ long blockmma_send_task(struct blockmma_cmd __user *user_cmd) //write data from 
 	// probably wake up by interrupt ? 
 
 	struct task_struct *p = current;
+	int res, task_state;
+
+	bool debug=True;
+
 	int st= p->state; /* 0 runnable, 1 interruptible, 2 un-interruptible, 4 stopped, 64 dead, 256 waking */
 	printk("Process accessing: %s and PID is %i \n", current->comm, current->pid);
 	printk("state is: %d \n", st);
 	printk("PID in send task is: %d, tgid: %d \n",p->pid, p->tgid);
 	
 	//user copy_from_user to copy the user_cmd to kernel space
-	struct blockmma_cmd kernel_cmd;
-	int res= copy_from_user(&kernel_cmd, user_cmd, sizeof(kernel_cmd)); //handle error
-	printk("res: %d", res);
-
-	printk("cmd address of a : %lld, address of b: %lld, tile: %d \n", kernel_cmd.a, kernel_cmd.b, kernel_cmd.tile);
+	if(res= copy_from_user(&kernel_cmd, user_cmd, sizeof(kernel_cmd) !=0){
+		if (debug)printk("Copy from user to kernel for task id: %d failed", p->tgid);
+		return -1;
+	} 
+	
+	kernel_cmd.tid= current->pid;
+	if (debug)printk("cmd address of a : %lld, address of b: %lld, tile: %lld \n", kernel_cmd.a, kernel_cmd.b, kernel_cmd.tile);
 
 	//access_ok(arg, cmd)
-	/*Creating Physical memory using kmalloc()*/
-	size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(float); //allocate 1024 bytes
-	printk("size allocated: %lu bytes ", mat_size);
+	//Creating Physical memory using kmalloc() -- for matrix C
+	size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(int); //allocate 64KB for matrix A
+	mat_a_mem = kmalloc(mat_size , GFP_KERNEL);
 
-	kernel_buffer = kmalloc(mat_size , GFP_KERNEL);
-
-	if(kernel_buffer == 0){
+	if(mat_a_mem == 0){
             printk(KERN_INFO "Cannot allocate memory in kernel\n");
             return -1;
     }
 
-	printk("I got: %zu bytes of memory\n", ksize(kernel_buffer));
+	printk("I got: %zu bytes of memory\n", ksize(mat_a_mem));
 
-	//release memory
-	kfree(kernel_buffer); 
-	printk("Memory released! ");
+	res= copy_from_user(mat_a_mem, (void *)kernel_cmd.a, mat_size); //handle error
+	printk("res of copy: %d", res);
+
+	printk("size of mat_a_mem: %zu\n", sizeof(mat_a_mem));
+	printk("Data copied for matrix a");
+
+	printk("value of first value of matix A: %d, %d, %d, %d", *mat_a_mem, *(mat_a_mem+1), *(mat_a_mem+2), *(mat_a_mem+127));
+
 	printk("______________________________________________\n");
+	printk("SDFsdfsdfsdf");
 
 	return 0;
 }
@@ -152,6 +126,13 @@ long blockmma_send_task(struct blockmma_cmd __user *user_cmd) //write data from 
  */
 int blockmma_sync(struct blockmma_cmd __user *user_cmd)
 {
+
+	//copy_to_user  free memory
+	printk("Entering sync.. ");
+
+	kfree(mat_a_mem); 
+	printk("Memory released! \n");
+
     return 0;
 }
 
@@ -164,10 +145,36 @@ int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd) //accelerat
 	//copy to particular accelerator memory ?
 	struct task_struct *p= current; //task_struct local to CPU
 
-	printk("Entering GET TASK ! \n");
+	printk("inside get task!");
+	printk("cmd address of a : %lld, address of b: %lld, tile: %lld \n", kernel_cmd.a, kernel_cmd.b, kernel_cmd.tile);
+	
+	//copy_to_user data from kernel to accelerator
 	printk("Process accessing: %d", current->pid);
 
-    return 0;
+	//struct blockmma_hardware_cmd kernel_cmd;
+	//copy_to_user data from kernel to accelerator
+	//get the stsrtaing address of a,b and c -> then copy the contents from kernel to these addresses.
+
+	static struct blockmma_hardware_cmd hw_cmd;
+	int res= copy_from_user(&hw_cmd, user_cmd, sizeof(hw_cmd)); //handle error
+	
+	if (res==0)
+	{
+		printk("Copy from hardware success! \n");
+	}
+	
+	//kernel_cmd.tid= current->pid;
+	size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(float);
+	res= copy_to_user((void *)hw_cmd.a, (void *)mat_a_mem, mat_size);
+
+	if (res==0)
+	{
+		printk("Copy to hardware success! \n");
+	}
+    
+	return 0; 
+
+	//return taskid : who copied data ?
 }
 
 
@@ -176,6 +183,18 @@ int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd) //accelerat
  */
 int blockmma_comp(struct blockmma_hardware_cmd __user *user_cmd)
 {
+	//read c
+	//get value of matrix C to kernel
+	struct blockmma_hardware_cmd kernel_cmd;
+	int res;
+	res= copy_from_user(&kernel_cmd, user_cmd, sizeof(kernel_cmd));
+	if (res!=0){
+		printk("Copy failed!");
+	}
+	
+	printk("copy success!");
+
+
     return 0;
 }
 
@@ -190,6 +209,7 @@ int blockmma_author(struct blockmma_hardware_cmd __user *user_cmd)
     {
         return -1;
     }
+
     copy_to_user((void *)cmd.a, (void *)authors, sizeof(authors));
 
 	printk("author_example - test_acc= %lld ,  cmd.tid= %lld \n", cmd.op, cmd.tid);

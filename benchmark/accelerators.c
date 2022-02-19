@@ -76,12 +76,12 @@ int main(int argc, char *argv[])
     pid_t ppid_before_fork = getpid();
     int recvSize;
     int pagesize = sysconf(_SC_PAGE_SIZE);
-    printf("Page size is : %d", pagesize);
+    printf("Page size in accelerator : %d \n", pagesize);
     num_of_accelerators = atoi(argv[1]);
     devfd = open("/dev/blockmma", O_RDWR);
     if (devfd < 0)
     {
-        fprintf(stderr, "Device open failed");
+        fprintf(stderr, "Device open failed \n");
         exit(1);
     }
     authors = (char *)memalign(pagesize, pagesize); // function returns a block of memory of size bytes aligned to blocksize. 
