@@ -53,7 +53,7 @@ extern struct miscdevice blockmma_dev; //declared in interface.c
 
 
 // code : Krishna
-*/
+
 int driver_open(struct inode *device_file, struct file *instance) {
 	printk("ioctl_example - blockmma file open was called!\n");
 	return 0;
@@ -69,6 +69,7 @@ int driver_close(struct inode *device_file, struct file *instance) {
 //queue has to be global
 int  *mat_a_mem, *mat_b_mem, *mat_c_mem;
 static struct blockmma_cmd kernel_cmd;
+
 long blockmma_send_task(struct blockmma_cmd __user *user_cmd) //write data from user - to driver
 {
 	//allocate memory for a acclerator
@@ -77,9 +78,9 @@ long blockmma_send_task(struct blockmma_cmd __user *user_cmd) //write data from 
 	// probably wake up by interrupt ? 
 
 	struct task_struct *p = current;
-	int res, task_state;
+	int resa, resb, resc, task_state;
 
-	bool debug=True;
+	bool debug=true;
 
 	int st= p->state; /* 0 runnable, 1 interruptible, 2 un-interruptible, 4 stopped, 64 dead, 256 waking */
 	printk("Process accessing: %s and PID is %i \n", current->comm, current->pid);
@@ -87,7 +88,8 @@ long blockmma_send_task(struct blockmma_cmd __user *user_cmd) //write data from 
 	printk("PID in send task is: %d, tgid: %d \n",p->pid, p->tgid);
 	
 	//user copy_from_user to copy the user_cmd to kernel space
-	if(res= copy_from_user(&kernel_cmd, user_cmd, sizeof(kernel_cmd) !=0){
+	if(resa= copy_from_user(&kernel_cmd, user_cmd, sizeof(kernel_cmd) !=0))
+	{
 		if (debug)printk("Copy from user to kernel for task id: %d failed", p->tgid);
 		return -1;
 	} 
@@ -99,23 +101,31 @@ long blockmma_send_task(struct blockmma_cmd __user *user_cmd) //write data from 
 	//Creating Physical memory using kmalloc() -- for matrix C
 	size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(int); //allocate 64KB for matrix A
 	mat_a_mem = kmalloc(mat_size , GFP_KERNEL);
-
-	if(mat_a_mem == 0){
+	//mat_b_mem = kmalloc(mat_size , GFP_KERNEL);
+	//mat_c_mem = kmalloc(mat_size , GFP_KERNEL);
+/*
+	if((mat_a_mem == 0) | (mat_b_mem==0) | (mat_c_mem==0)){
             printk(KERN_INFO "Cannot allocate memory in kernel\n");
             return -1;
-    }
+    }*/
 
-	printk("I got: %zu bytes of memory\n", ksize(mat_a_mem));
+	printk("I got: %zu bytes of memory for each matrix\n", ksize(mat_a_mem));
 
-	res= copy_from_user(mat_a_mem, (void *)kernel_cmd.a, mat_size); //handle error
-	printk("res of copy: %d", res);
-
-	printk("size of mat_a_mem: %zu\n", sizeof(mat_a_mem));
-	printk("Data copied for matrix a");
+	resa= copy_from_user(mat_a_mem, (void *)kernel_cmd.a, mat_size); //handle error
+	//resb= copy_from_user(mat_b_mem, (void *)kernel_cmd.b, mat_size); //handle error
+	//resc= copy_from_user(mat_c_mem, (void *)kernel_cmd.c, mat_size); //handle error
+/*
+	if ( (resa !=0) | (resb !=0) | (resc!=0)){
+		printk("Copying from user to matrices A,B and C failed !!");
+	}
+*/
+	//printk("size of mat_a_mem: %zu\n", sizeof(mat_a_mem));
+	printk("Data copied for matrix a, b and c");
 
 	printk("value of first value of matix A: %d, %d, %d, %d", *mat_a_mem, *(mat_a_mem+1), *(mat_a_mem+2), *(mat_a_mem+127));
+	//printk("value of first value of matix B: %d, %d, %d, %d", *mat_b_mem, *(mat_b_mem+1), *(mat_b_mem+2), *(mat_b_mem+127));
 
-	printk("______________________________________________\n");
+	printk("____________________________________________________________\n");
 	printk("SDFsdfsdfsdf");
 
 	return 0;
@@ -128,10 +138,25 @@ int blockmma_sync(struct blockmma_cmd __user *user_cmd)
 {
 
 	//copy_to_user  free memory
-	printk("Entering sync.. ");
+	printk("Entering sync.. \n");
 
+	size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(int); 
+
+	//write only to c matrix
+	int res;
+	res= copy_to_user((void *)kernel_cmd.c, (void *)mat_c_mem, mat_size);
+
+	if (res!=0){
+		printk("Blockmma sync copy of matrix C to user failed!! ");
+	}
+	
 	kfree(mat_a_mem); 
+	kfree(mat_b_mem);
+	kfree(mat_c_mem);
 	printk("Memory released! \n");
+
+	printk("---------- Validation--------- \n");
+	printk("I got: %zu %zu %zu bytes of memory for each matrix\n", ksize(mat_a_mem),  ksize(mat_b_mem),  ksize(mat_c_mem));
 
     return 0;
 }
@@ -139,13 +164,15 @@ int blockmma_sync(struct blockmma_cmd __user *user_cmd)
 /**
  * Return the task id of a task to the caller/accelerator to perform computation.
  */
+static struct blockmma_hardware_cmd hw_cmd;
+
 int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd) //accelerator gets data from driver : write data from driver - device
 {
 
 	//copy to particular accelerator memory ?
 	struct task_struct *p= current; //task_struct local to CPU
 
-	printk("inside get task!");
+	printk("inside get task! \n");
 	printk("cmd address of a : %lld, address of b: %lld, tile: %lld \n", kernel_cmd.a, kernel_cmd.b, kernel_cmd.tile);
 	
 	//copy_to_user data from kernel to accelerator
@@ -154,24 +181,30 @@ int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd) //accelerat
 	//struct blockmma_hardware_cmd kernel_cmd;
 	//copy_to_user data from kernel to accelerator
 	//get the stsrtaing address of a,b and c -> then copy the contents from kernel to these addresses.
-
-	static struct blockmma_hardware_cmd hw_cmd;
-	int res= copy_from_user(&hw_cmd, user_cmd, sizeof(hw_cmd)); //handle error
 	
-	if (res==0)
+	int resa, resb, resc;
+	resa= copy_from_user(&hw_cmd, user_cmd, sizeof(hw_cmd)); //handle error --cpoy cmd from harware
+
+	printk("hardware cmd address of a : %lld, address of b: %lld, tile: %lld \n", hw_cmd.a, hw_cmd.b, hw_cmd.c);
+	
+	if (resa==0)
 	{
 		printk("Copy from hardware success! \n");
 	}
 	
 	//kernel_cmd.tid= current->pid;
+	//copy matrix A,B and C to hardware
 	size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(float);
-	res= copy_to_user((void *)hw_cmd.a, (void *)mat_a_mem, mat_size);
+	resa= copy_to_user((void *)hw_cmd.a, (void *)mat_a_mem, mat_size);
+	resb= copy_to_user((void *)hw_cmd.b, (void *)mat_b_mem, mat_size);
+	resc= copy_to_user((void *)hw_cmd.c, (void *)mat_c_mem, mat_size);
 
-	if (res==0)
+	if ((resa==0) & (resb==0) & (resc==0))
 	{
 		printk("Copy to hardware success! \n");
 	}
     
+
 	return 0; 
 
 	//return taskid : who copied data ?
@@ -184,16 +217,19 @@ int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd) //accelerat
 int blockmma_comp(struct blockmma_hardware_cmd __user *user_cmd)
 {
 	//read c
-	//get value of matrix C to kernel
-	struct blockmma_hardware_cmd kernel_cmd;
+	//get value of matrix C only to kernel
+	printk("Entering computation.. \n");
+
 	int res;
-	res= copy_from_user(&kernel_cmd, user_cmd, sizeof(kernel_cmd));
+	size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(float);
+	printk("hardware cmd address of a : %lld, address of b: %lld, tile: %lld \n", hw_cmd.a, hw_cmd.b, hw_cmd.c);
+
+	res= copy_from_user(mat_c_mem, (void *)hw_cmd.c, mat_size);
 	if (res!=0){
 		printk("Copy failed!");
 	}
 	
-	printk("copy success!");
-
+	printk("copy for matrix C from hardware success!");
 
     return 0;
 }
