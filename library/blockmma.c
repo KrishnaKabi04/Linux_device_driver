@@ -40,9 +40,9 @@ int blockmma(int devfd, int *a, int *b, int *c, int M, int N, int K)
   printf("val of a[M]: %d \n", *(a+M));
   printf("adress of a[M]: %d \n", &a[M]);
 
-  printf("value of b[0]: %f \n", b[0]);
-  printf("val of b[1]: %f \n", *(b+1));
-  printf("val of b[N]: %f \n", *(b+N));
+  printf("value of b[0]: %d \n", b[0]);
+  printf("val of b[1]: %d \n", *(b+1));
+  printf("val of b[N]: %d \n", *(b+N));
   printf("address of b[N]: %lld \n",&b[N]);
 
   printf("value of c[0]: %d \n", c[0]);
@@ -60,8 +60,9 @@ int blockmma(int devfd, int *a, int *b, int *c, int M, int N, int K)
         printf("i= %d, j= %d, k= %d \n \n", i,j,k);
         blockmma_f128(devfd, &a[i*N+j], &b[j*K+k], &c[i*K+k], M, N, K, 128); //0 0 0 
                                                                               //0 128 [0 128 256 ...]   : queue : FIFO workqueue, tasklet 
-        
       }
+
+      //put process in sleep
       blockmma_sync(devfd); //copy data back to user-space ? free memory
       return 0;
     }
@@ -144,7 +145,6 @@ int blockmma_f128(int devfd, int *a, int *b, int *c, int m, int n, int k, int ti
     //printf("size of a: %ld \n", sizeof(a));
 
     while(ioctl(devfd, BLOCKMMA_IOCTL_SEND_TASK, &cmd)== -1); // the ioctl func needs to return an exit code to break loop on success
-    printf(" break loop in blockmma_f128");
     return 0;
 }
 
@@ -177,21 +177,30 @@ int blockmma_f128_accelerator(int devfd)
     cmd.b = (__u64)b;
     cmd.c = (__u64)c;
     signal(SIGQUIT, sigquit); //terminate a  process
+    int ctr=1;
+
+    printf("------------------ accelerator---------------\n");
 
     while(1)
     {
+        printf("ctr: %d \n", ctr);
+        ctr= ctr+1;
+
         if((tid=ioctl(devfd, BLOCKMMA_IOCTL_GET_TASK, &cmd))>=0) //makes sure data is mapped to .. queue2 : data from kernel
         {
             
-            printf("fetch value of matrix b: %d, %d, %d, %d ", b[0], b[1], b[2], b[127]);
+            printf("fetch value of matrix a: %d, %d, %d, %d \n", a[0], a[1], a[2], a[127]);
+            printf("fetch value of matrix b: %d, %d, %d, %d \n", b[0], b[1], b[2], b[127]);
             for(i = 0; i < 128; i++)
                 for(j = 0; j < 128; j++)
                     for(k = 0; k < 128; k++)
                         c[i*128+j] += a[i*128+k]*b[k*128+j]; //acc
             cmd.tid = tid;
             printf("Copy to user var : %d \n", cmd.tid);
+            printf("fetch value of matrix c: %d, %d, %d, %d ", c[0], c[1], c[2], c[127]);
             ioctl(devfd, BLOCKMMA_IOCTL_COMP, &cmd);
             counter++;
+            if (ctr==4)return 0;
         }
     }
     exit(1);

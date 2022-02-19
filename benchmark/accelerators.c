@@ -146,7 +146,7 @@ int main(int argc, char *argv[])
   	        cliAddressLength = sizeof(clientAddress);
   	        clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddress, &cliAddressLength);
   	        if ((recvSize = recv(clientSocket, echoBuffer, RCVBUFSIZE, 0)) < 0)
-  	        {
+  	        { 
   	                fprintf(stderr,"Error!\n");
   	        }
   	        else
