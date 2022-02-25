@@ -43,130 +43,150 @@
 #include <linux/mutex.h>
 #include <linux/sched.h>
 #include <linux/mutex.h>
-#include <asm/current.h>
-#include <linux/kthread.h>
+#include <asm/uaccess.h>
+
 #include "core.h"
 
-extern struct miscdevice blockmma_dev; //declared in interface.c
+/*Queue implementation starts*/
+
+
+//Linked list node
+struct k_list {
+    struct list_head queue_list; //struct of linked list
+    //struct task_struct *p;
+    struct blockmma_cmd * kernel_cmd_d;
+    int *mat_a_d;
+    int tsk_id;
+};
+
+static struct k_list * node, *entry;
+struct list_head  *ptr; //submit task to this queue ?
+//task_queue = kmalloc(sizeof(struct k_list * ), GFP_KERNEL);
+LIST_HEAD(task_queue);
+
+//LIST_HEAD(Head_node);
+//static struct k_list mylist;
+//INIT_LIST_HEAD(&mylist -> queue_list);
+
+/*
+struct blockmma_hardware_cmd * pop_queue(struct list_head * head) {
+    struct k_list * node;
+    struct blockmma_hardware_cmd * msg;
+    struct list_head * queue_node;
+    node = list_first_entry(head, struct k_list, queue_list);
+    msg = node -> data;
+    queue_node = & node -> queue_list;
+    list_del(queue_node);
+    len--;
+    return msg;
+}*/
+
+//add elements to mylist
+void push_queue(struct blockmma_cmd * k_cmd, int *a) {
+    
+    /*struct k_list *tmp_node; */
+    //node = kmalloc(sizeof(struct k_list), GFP_KERNEL);
+    printk("size of point node before allocation: %zu", ksize(node));
+    node = kmalloc(sizeof(struct k_list * ), GFP_KERNEL); 
+    printk("size of point node after allocation: %zu", ksize(node));
+    node -> kernel_cmd_d = k_cmd;
+    node -> mat_a_d= a;
+    node -> tsk_id= 612;
+    //node -> mat_b_d= b;
+    //node -> mat_c_d= c;
+    
+    list_add_tail( & node -> queue_list, &task_queue);
+    int count=0;
+    //traverse the list
+    list_for_each(ptr,&task_queue)
+    {
+        entry=list_entry(ptr, struct k_list, queue_list);  //returns address of list in current sructure
+        printk(KERN_INFO "\n task id:  %d   \n ", entry->tsk_id);
+        printk(KERN_INFO "\n address of a  %lld , value: %d %d \n ", entry->kernel_cmd_d->a, *(entry->mat_a_d), *(entry->mat_a_d));
+        count++;
+    }   
+    printk("Total Nodes = %d\n", count);
+
+    printk("size of point node before kfree: %zu", ksize(node));
+    kfree(node);
+    printk("Memory assigned to node freed! ");
+    printk("size of point node after kfree: %zu", ksize(node));
+    //len++;
+
+}
+
+/*Queue implementation ends*/
+
+
+extern struct miscdevice blockmma_dev;
 /**
  * Enqueue a task for the caller/accelerator to perform computation.
  */
-
-
-// code : Krishna
-/*
-int driver_open(struct inode *device_file, struct file *instance) {
-	printk("ioctl_example - blockmma file open was called!\n");
-	return 0;
-}
-
-int driver_close(struct inode *device_file, struct file *instance) {
-	printk("ioctl_example - blockmma file close was called!\n");
-	return 0;
-}
-*/
-// end : Krishna
-
-static DECLARE_WAIT_QUEUE_HEAD(send_wq);
-static int send_flag=0; //use mutex to modify -> this flag used by get_task 
-static int buffer_size;
-static DECLARE_WAIT_QUEUE_HEAD(get_wq);
-
-struct mutex shared_lock;
-	
-DEFINE_MUTEX(shared_lock); 
-
-struct task_struct *proc = current;
-int ctr_thread=1
-
-int send_thread_func(struct blockmma_cmd __user *user_cmd)
+long blockmma_send_task(struct blockmma_cmd __user *user_cmd)
 {
-	struct task_struct *tid=current;
-	pid_t tid_d= current->pid;
 
-	printk("PID in send task is: %d, tgid: %d \n",tid->pid, tid->tgid);
-	printk("Task id in thread function: %i", tid_d);
-
-	//grab lock for kernel_cmd and copy
-	static struct blockmma_cmd kernel_cmd;
-	int  *mat_a_mem, *mat_b_mem, *mat_c_mem;
-	int resa, resb, resc, task_state;
-
-	//user copy_from_user to copy the user_cmd to kernel space
-	resa= copy_from_user(&kernel_cmd, user_cmd, sizeof(kernel_cmd)); //handle error
-	printk("res: %d \n", resa);
-	kernel_cmd.tid= tid_d;
-	printk("cmd address of a : %lld, address of b: %lld, tile: %lld \n", kernel_cmd.a, kernel_cmd.b, kernel_cmd.tile);
-
-	//grab lock for mat a,b and c and copy
-	//Creating Physical memory using kmalloc() -- for matrix A,B and C
-	size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(int); //allocate 64KB for matrix A
-	mat_a_mem = kmalloc(mat_size , GFP_KERNEL);
-	if(mat_a_mem == 0){
-            printk(KERN_INFO "Cannot allocate memory for matrix A in kernel\n");
-            return -1;
-    }
-
-	mat_b_mem = kmalloc(mat_size , GFP_KERNEL);	
-	if(mat_b_mem == 0){
-            printk(KERN_INFO "Cannot allocate memory for matrix B in kernel\n");
-            return -1;
-    }
-
-	mat_c_mem = kmalloc(mat_size , GFP_KERNEL);
-	if(mat_c_mem == 0){
-            printk(KERN_INFO "Cannot allocate memory for matrix C in kernel\n");
-            return -1;
-    }
-	printk("I got: %zu bytes of memory\n", ksize(mat_c_mem));
-	
-	resa= copy_from_user(mat_a_mem, (void *)kernel_cmd.a, mat_size); //handle error
-	resb= copy_from_user(mat_b_mem, (void *)kernel_cmd.b, mat_size); //handle error
-	resc= copy_from_user(mat_c_mem, (void *)kernel_cmd.c, mat_size); //handle error
-	printk("res of copy: %d %d, %d", resa, resb, resc);
-
-	printk("size of mat_a_mem: %zu \n", sizeof(mat_a_mem));
-	printk("Data copied for matrix a");
-
-	printk("value of first value of matix A: %d, %d, %d, %d", *mat_a_mem, *(mat_a_mem+1), *(mat_a_mem+2), *(mat_a_mem+127));
-	printk("value of first value of matix B: %d, %d, %d, %d", *mat_b_mem, *(mat_b_mem+1), *(mat_b_mem+2), *(mat_b_mem+127));
-
-	printk("______________________________________________\n");
-
-	//write to input_buffer -> if buffer full -> wait to write in buffer in a different queue
-
-}
-
-long blockmma_send_task(struct blockmma_cmd __user *user_cmd) //write data from user - to driver
-{
-	
-	int resa, resb, resc, task_state;
-	bool debug=true;
-	
-	//int st= p->state; /* 0 runnable, 1 interruptible, 2 un-interruptible, 4 stopped, 64 dead, 256 waking */
-	printk("Process accessing: %s and PID is %i \n", current->comm, current->pid);
+    struct task_struct *p=current;
+    printk("Process accessing: %s and PID is %i \n", current->comm, current->pid);
 	printk("PID in send task is: %d, tgid: %d \n",p->pid, p->tgid);
+    
+    struct blockmma_cmd kernel_cmd;
+    copy_from_user(&kernel_cmd, user_cmd, sizeof(kernel_cmd)); 
 
-	struct task_struct *send_thread;
-	send_thread= kthread_run(send_thread_func, &user_cmd, "Send_Thread_"+str(ctr_thread)) ; // create thread and copy from user
-	if (send_thread)
-	{
-		printk("send thread created for %i and %i", send_thread->pid, current->pid);
-		ctr_thread=ctr_thread+1;
-	}
-	else 
-	{
- 		printk(KERN_ERR "Cannot create kthread for process id %i \n", current->pid); 
-	}
-	
-	printk("Current process task id: %i and %i", current->pid, send_thread->pid);
+    //int m = user_cmd->m;
+    //int n = user_cmd->n;
+    //int k = user_cmd->k;
+    
+    int row = 0;
+    int *mat_a; // *mat_b, *mat_c;
+    printk("size of point mata: %zu ",ksize(mat_a));
 
-	//Signal to get_task queue: put in a input buffer? -> if buffer full -> wait to write in buffer in a different queue
+    mat_a = (int *)kmalloc(128*128*sizeof(int), GFP_KERNEL);
+    //mat_b = (int *)kmalloc(128*128*sizeof(int), GFP_KERNEL);
+    //mat_c = (int *)kmalloc(128*128*sizeof(int), GFP_KERNEL);
 
-	//
-	
+    //kernel_cmd.a = (__u64)a;
+    //kernel_cmd.b = (__u64)b;
+    //kernel_cmd.c = (__u64)c;
+    //kernel_cmd.tid = (__u64)task_id;
 
-	return 0;
+    //op_address = (float *)(user_cmd->a);
+    /*
+    for(row=0;row<128;row++){
+        copy_from_user(&(a[row]), &(((int *)(user_cmd->a))[row*n]), sizeof(int)*128);
+        copy_from_user(&(b[row]), &(((int *)(user_cmd->b))[row*n]), sizeof(int)*128);
+        copy_from_user(&(c[row]), &(((int *)(user_cmd->c))[row*n]), sizeof(int)*128);
+    }
+    */
+    size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(int);
+    copy_from_user(mat_a, (void *)kernel_cmd.a, mat_size);
+    //resb= copy_from_user(mat_b, (void *)kernel_cmd.b, mat_size);
+    //resc= copy_from_user(mat_c, (void *)kernel_cmd.c, mat_size);
+
+    printk(KERN_INFO "\n Probably copy worked %lld %lld %lld \n", kernel_cmd.m, kernel_cmd.n, kernel_cmd.k);
+    printk("value of first value of matix A: %d, %d, %d, %d", *mat_a, *(mat_a+1), *(mat_a+2), *(mat_a+127));
+    printk("address of a %lld ", mat_a);
+
+    printk("I got: %zu bytes of memory\n", ksize(mat_a));
+
+    //task_queue = queue_init();
+    push_queue(&kernel_cmd, mat_a) ;//, &mat_b, &mat_c);
+
+
+    //deallocating memory
+    kfree(mat_a);
+    printk("size of point mata: %zu", ksize(mat_a));
+    kfree(mat_a);
+    printk("size of point mata: %zu", ksize(mat_a));
+	//kfree(mat_b);
+	//kfree(mat_c); 
+	printk("Memory released! \n");
+
+    //incomplete_task++;
+    //printk(KERN_INFO "\n No error push\n");
+    //printk("task_id: %d", (int)task_id);
+    // pop_queue(sample_queue);
+    // printk(KERN_INFO "\n No error pop 02-22-2022\n");
+    return 0;
 }
 
 /**
@@ -174,78 +194,34 @@ long blockmma_send_task(struct blockmma_cmd __user *user_cmd) //write data from 
  */
 int blockmma_sync(struct blockmma_cmd __user *user_cmd)
 {
-	//all threads Poll for COMP: For this process -> iterate through all tasks and free memory -> stop threads
-
-
-	//copy_to_user  free memory
-	printk("Entering sync.. \n");
-	size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(int); 
-
-	//write only to c matrix
-	int res;
-	res= copy_to_user((void *)kernel_cmd.c, (void *)mat_c_mem, mat_size);
-
-	if (res!=0){
-		printk("Blockmma sync copy of matrix C to user failed!! ");
-	}
-	kfree(mat_a_mem);
-	kfree(mat_b_mem);
-	kfree(mat_c_mem); 
-	printk("Memory released! \n");
-
-	kthread_stop(etx_thread);
-	ctr_thread=0;
+   // printk("sync incomplete_task: %d", incomplete_task);
+    // if(incomplete_task>0){
+    //     return -1;
+    // }
+    // return 0;
     return 0;
 }
 
 /**
  * Return the task id of a task to the caller/accelerator to perform computation.
  */
-
-
-static struct blockmma_hardware_cmd hw_cmd;
-int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd) //accelerator gets data from driver : write data from driver - device
+int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd)
 {
+    /*
+    struct blockmma_hardware_cmd *task;
+    if(incomplete_task==0){
+        return -1;
+    }
+    task = pop_queue(task_queue);
+    copy_to_user((float *)user_cmd->a, (float *)task->a, sizeof(float)*128*128);
+    copy_to_user((float *)user_cmd->b, (float *)task->b, sizeof(float)*128*128);
+    copy_to_user((float *)user_cmd->c, (float *)task->c, sizeof(float)*128*128);
+    printk("get_task no errors");
+    printk("get_task task_id: %d", (int)(task->tid));
+    return (int)(task->tid);
+    */
 
-	wait_event_interruptible(); // (poll / interupt) 
-
-	//copy to particular accelerator memory ?
-	struct task_struct *p= current; //task_struct local to CPU
-
-	printk("inside get task! \n");
-	printk("cmd address of a : %lld, address of b: %lld, tile: %lld \n", kernel_cmd.a, kernel_cmd.b, kernel_cmd.tile);
-	
-	//copy_to_user data from kernel to accelerator
-	printk("Process accessing: %d", current->pid);
-
-	//struct blockmma_hardware_cmd kernel_cmd;
-	//copy_to_user data from kernel to accelerator
-	//get the stsrtaing address of a,b and c -> then copy the contents from kernel to these addresses.
-
-	int resa, resb, resc;
-	resa= copy_from_user(&hw_cmd, user_cmd, sizeof(hw_cmd)); //handle error
-	
-	printk("hardware cmd address of a : %lld, address of b: %lld, tile: %lld \n", hw_cmd.a, hw_cmd.b, hw_cmd.c);
-
-	if (resa==0)
-	{
-		printk("Copy from hardware success! \n");
-	}
-	
-	//kernel_cmd.tid= current->pid;
-	size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(int);
-	resa= copy_to_user((void *)hw_cmd.a, (void *)mat_a_mem, mat_size);
-	resb= copy_to_user((void *)hw_cmd.b, (void *)mat_b_mem, mat_size);
-	resc= copy_to_user((void *)hw_cmd.c, (void *)mat_c_mem, mat_size);
-
-	if ((resa==0) & (resb==0) & (resc==0))
-	{
-		printk("Copy to hardware success! \n");
-	}
-    
-	return 0; 
-
-	
+    return 0;
 }
 
 
@@ -254,24 +230,16 @@ int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd) //accelerat
  */
 int blockmma_comp(struct blockmma_hardware_cmd __user *user_cmd)
 {
-
-	
-
-	//read c
-	//get value of only matrix C to kernel
-	printk("Entering computation.. \n");
-	int res;
-	size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(int);
-	printk("hardware cmd address of a : %lld, address of b: %lld, tile: %lld \n", hw_cmd.a, hw_cmd.b, hw_cmd.c);
-
-	res= copy_from_user(mat_c_mem, (void *)hw_cmd.c, mat_size);
-	if (res!=0){
-		printk("Copy failed!");
-	}
-
-	printk("copy for matrix C from hardware success!");
-
-    return 0;
+    /*
+    float * result;
+    result = (float *)(user_cmd->c);
+    printk("starting to copy result");
+    copy_to_user(op_address, result, sizeof(float)*128*128);
+    printk("copied result to user");
+    incomplete_task--;
+    return (int)((int*)(user_cmd->tid));
+    */
+   return 0;
 }
 
 /*
@@ -280,24 +248,19 @@ int blockmma_comp(struct blockmma_hardware_cmd __user *user_cmd)
 int blockmma_author(struct blockmma_hardware_cmd __user *user_cmd)
 {
     struct blockmma_hardware_cmd cmd;
-    char authors[] = "Krishna Kabi(kkabi004), (SID: 862255132) ";// Yu-Chia Liu (yliu719), 987654321 and Hung-Wei Tseng (htseng), 123456789";
-    if (copy_from_user(&cmd, user_cmd, sizeof(cmd))) //copying data from user
+    char authors[] = "Krishna Kabi(kkabi004), (SID: 862255132) "; //"Yu-Chia Liu (yliu719), 987654321 and Hung-Wei Tseng (htseng), 123456789";
+    if (copy_from_user(&cmd, user_cmd, sizeof(cmd)))
     {
         return -1;
     }
-
     copy_to_user((void *)cmd.a, (void *)authors, sizeof(authors));
-
-	printk("author_example - test_acc= %lld ,  cmd.tid= %lld \n", cmd.op, cmd.tid);
-	printk("Process accessing in blockmma_author: %d", current->pid);
-	
     return 0;
 }
 
 int blockmma_init(void)
 {
     int ret =0;
-    if ((ret = misc_register(&blockmma_dev))) //register device with kernel
+    if ((ret = misc_register(&blockmma_dev)))
     {
         printk(KERN_ERR "Unable to register \"blockmma\" misc device\n");
         return ret;
@@ -309,5 +272,6 @@ int blockmma_init(void)
 void blockmma_exit(void)
 {
     printk("BlockMMA removed\n");
-    misc_deregister(&blockmma_dev); // un-register device with kernel
+    misc_deregister(&blockmma_dev);
 }
+

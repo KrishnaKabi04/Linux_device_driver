@@ -45,8 +45,6 @@
 #include <linux/mutex.h>
 
 extern long blockmma_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
-extern int driver_open(struct inode *device_file, struct file *instance);
-extern int driver_close(struct inode *device_file, struct file *instance);
 //extern long my_ioctl(struct file *file, unsigned cmd, unsigned long arg);
 
 //extern int blockmma_mmap(struct file *filp, struct vm_area_struct *vma);
@@ -56,9 +54,6 @@ extern void blockmma_exit(void);
 
 static const struct file_operations blockmma_fops = {
     .owner = THIS_MODULE, //This field is used to prevent the module from being unloaded while its operations are in use.
-    .open = driver_open,
-	.release = driver_close,
-    //.unlocked_ioctl = my_ioctl,
     .unlocked_ioctl = blockmma_ioctl, //to get device specific commands. 
                                      // This field is used to prevent the module from being unloaded while its operations are in use.
 
