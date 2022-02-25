@@ -50,7 +50,7 @@ struct blockmma_cmd {
     __u64 a;
     __u64 b;
     __u64 c;
-    __u64 m; // # of Rows in A and # of Cols in C
+    __u64 m; // # of Rows in A and # of Cols in C  -- is it rows in C ?
     __u64 n; // # of Cols in A and # of Rows in B
     __u64 k; // # of Cols in B and # of Cols in C
     __u64 tile; // # of elements in each Row/col of the matrix tile

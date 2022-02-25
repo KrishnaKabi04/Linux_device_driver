@@ -61,10 +61,8 @@ int blockmma(int devfd, int *a, int *b, int *c, int M, int N, int K)
         blockmma_f128(devfd, &a[i*N+j], &b[j*K+k], &c[i*K+k], M, N, K, 128); //0 0 0 
                                                                               //0 128 [0 128 256 ...]   : queue : FIFO workqueue, tasklet 
       }
-
-      //put process in sleep
+      exit(0);
       blockmma_sync(devfd); //copy data back to user-space ? free memory
-      return 0;
     }
   }  
 
