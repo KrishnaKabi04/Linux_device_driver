@@ -82,6 +82,7 @@ struct blockmma_hardware_cmd * pop_queue(struct list_head * head) {
 }*/
 
 //add elements to mylist
+int count=0;
 void push_queue(struct blockmma_cmd * k_cmd, int *a) {
     
     /*struct k_list *tmp_node; */
@@ -96,13 +97,12 @@ void push_queue(struct blockmma_cmd * k_cmd, int *a) {
     //node -> mat_c_d= c;
     
     list_add_tail( & node -> queue_list, &task_queue);
-    int count=0;
     //traverse the list
     list_for_each(ptr,&task_queue)
     {
         entry=list_entry(ptr, struct k_list, queue_list);  //returns address of list in current sructure
         printk(KERN_INFO "\n task id:  %d   \n ", entry->tsk_id);
-        printk(KERN_INFO "\n address of a  %lld , value: %d %d \n ", entry->kernel_cmd_d->a, *(entry->mat_a_d), *(entry->mat_a_d));
+        printk(KERN_INFO "\n address of a  %lld , value: %d %d \n ", entry->kernel_cmd_d->a, *(entry->mat_a_d), *(entry->mat_a_d +1));
         count++;
     }   
     printk("Total Nodes = %d\n", count);
@@ -140,7 +140,8 @@ long blockmma_send_task(struct blockmma_cmd __user *user_cmd)
     int *mat_a; // *mat_b, *mat_c;
     printk("size of point mata: %zu ",ksize(mat_a));
 
-    mat_a = (int *)kmalloc(128*128*sizeof(int), GFP_KERNEL);
+    size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(int);
+    mat_a = kmalloc(mat_size, GFP_KERNEL);
     //mat_b = (int *)kmalloc(128*128*sizeof(int), GFP_KERNEL);
     //mat_c = (int *)kmalloc(128*128*sizeof(int), GFP_KERNEL);
 
@@ -157,7 +158,7 @@ long blockmma_send_task(struct blockmma_cmd __user *user_cmd)
         copy_from_user(&(c[row]), &(((int *)(user_cmd->c))[row*n]), sizeof(int)*128);
     }
     */
-    size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(int);
+    
     copy_from_user(mat_a, (void *)kernel_cmd.a, mat_size);
     //resb= copy_from_user(mat_b, (void *)kernel_cmd.b, mat_size);
     //resc= copy_from_user(mat_c, (void *)kernel_cmd.c, mat_size);
@@ -175,8 +176,8 @@ long blockmma_send_task(struct blockmma_cmd __user *user_cmd)
     //deallocating memory
     kfree(mat_a);
     printk("size of point mata: %zu", ksize(mat_a));
-    kfree(mat_a);
-    printk("size of point mata: %zu", ksize(mat_a));
+    //kfree(mat_a);
+    //printk("size of point mata: %zu", ksize(mat_a));
 	//kfree(mat_b);
 	//kfree(mat_c); 
 	printk("Memory released! \n");
