@@ -60,10 +60,10 @@ int blockmma(int devfd, int *a, int *b, int *c, int M, int N, int K)
         printf("i= %d, j= %d, k= %d \n \n", i,j,k);
         blockmma_f128(devfd, &a[i*N+j], &b[j*K+k], &c[i*K+k], M, N, K, 128); //0 0 0 
                                                                               //0 128 [0 128 256 ...]   : queue : FIFO workqueue, tasklet 
-        return 0;
       }
-      //exit(0);
+
       blockmma_sync(devfd); //copy data back to user-space ? free memory
+      return 0;
     }
   }  
 
@@ -153,7 +153,7 @@ int blockmma_sync(int devfd)
 {
     struct blockmma_cmd cmd;
     cmd.op = (__u64)0;
-    while(ioctl(devfd, BLOCKMMA_IOCTL_SYNC, &cmd) == -1); //break loop
+    while(ioctl(devfd, BLOCKMMA_IOCTL_SYNC, &cmd) == -1); 
     return 0;
 }
 

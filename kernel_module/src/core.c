@@ -49,24 +49,23 @@
 
 /*Queue implementation starts*/
 
+bool debug= true;
+extern struct miscdevice blockmma_dev;
 
 //Linked list node
 struct k_list {
     struct list_head queue_list; //struct of linked list
-    //struct task_struct *p;
-    struct blockmma_cmd * kernel_cmd_d;
-    int *mat_a_d;
+    struct task_struct *proc;
+    struct blockmma_cmd kernel_cmd_d;
+	//struct blockmma_hardware_cmd * hw_cmd_d;
+    int *mat_b_d; //*mat_a_d, *mat_b_d, *mat_c_d;
     int tsk_id;
 };
 
-static struct k_list * node, *entry;
-struct list_head  *ptr; //submit task to this queue ?
-//task_queue = kmalloc(sizeof(struct k_list * ), GFP_KERNEL);
-LIST_HEAD(task_queue);
-
-//LIST_HEAD(Head_node);
-//static struct k_list mylist;
-//INIT_LIST_HEAD(&mylist -> queue_list);
+static size_t mat_size = ( 128 * 128)*sizeof(int);
+static struct k_list * node, *entry, *temp;
+static struct list_head  *ptr ;
+LIST_HEAD(task_queue);  //submit task to this queue ?
 
 /*
 struct blockmma_hardware_cmd * pop_queue(struct list_head * head) {
@@ -81,44 +80,45 @@ struct blockmma_hardware_cmd * pop_queue(struct list_head * head) {
     return msg;
 }*/
 
-//add elements to mylist
-int count=0;
-void push_queue(struct blockmma_cmd * k_cmd, int *a) {
-    
-    /*struct k_list *tmp_node; */
-    //node = kmalloc(sizeof(struct k_list), GFP_KERNEL);
-    printk("size of point node before allocation: %zu", ksize(node));
-    node = kmalloc(sizeof(struct k_list * ), GFP_KERNEL); 
-    printk("size of point node after allocation: %zu", ksize(node));
-    node -> kernel_cmd_d = k_cmd;
-    node -> mat_a_d= a;
-    node -> tsk_id= 612;
-    //node -> mat_b_d= b;
-    //node -> mat_c_d= c;
-    
-    list_add_tail( & node -> queue_list, &task_queue);
-    //traverse the list
-    list_for_each(ptr,&task_queue)
-    {
-        entry=list_entry(ptr, struct k_list, queue_list);  //returns address of list in current sructure
-        printk(KERN_INFO "\n task id:  %d   \n ", entry->tsk_id);
-        printk(KERN_INFO "\n address of a  %lld , value: %d %d \n ", entry->kernel_cmd_d->a, *(entry->mat_a_d), *(entry->mat_a_d +1));
-        count++;
-    }   
-    printk("Total Nodes = %d\n", count);
 
-    printk("size of point node before kfree: %zu", ksize(node));
-    kfree(node);
-    printk("Memory assigned to node freed! ");
-    printk("size of point node after kfree: %zu", ksize(node));
-    //len++;
+int count=1;
+
+void push_queue(struct blockmma_cmd k_cmd, int *b) {
+    
+    //printk("size of point node before allocation: %zu", ksize(node));
+    node = kmalloc(sizeof(struct k_list * ), GFP_KERNEL); 
+    //printk("size of point node after allocation: %zu", ksize(node));
+    node -> kernel_cmd_d = k_cmd;
+    //node -> mat_a_d= a;
+    node -> mat_b_d= b;
+    //node -> mat_c_d= c;
+    node->proc= current;
+    node -> tsk_id= count;
+    count++;
+
+    list_add_tail( &node -> queue_list, &task_queue);
+    
+    //traverse the list
+    if (debug){
+        printk("Traversing the list \n");
+
+        list_for_each(ptr,&task_queue)
+        {
+            entry=list_entry(ptr, struct k_list, queue_list);  //returns address of list in current sructure
+            printk(KERN_INFO "task id:  %d   \n ", entry->tsk_id);
+            printk(KERN_INFO "address of b  in user space %lld , kernel space: %lld, value: %d %d \n ", entry->kernel_cmd_d.b, entry->mat_b_d, *(entry->mat_b_d), *(entry->mat_b_d +1));
+        }   
+
+    }
+    entry=NULL;
+    node=NULL;
+
+    printk("Total Nodes = %d \n", count-1);
 
 }
 
 /*Queue implementation ends*/
 
-
-extern struct miscdevice blockmma_dev;
 /**
  * Enqueue a task for the caller/accelerator to perform computation.
  */
@@ -126,67 +126,32 @@ long blockmma_send_task(struct blockmma_cmd __user *user_cmd)
 {
 
     struct task_struct *p=current;
-    printk("Process accessing: %s and PID is %i \n", current->comm, current->pid);
-	printk("PID in send task is: %d, tgid: %d \n",p->pid, p->tgid);
-    
     struct blockmma_cmd kernel_cmd;
+    int *mat_b; //*mat_a, *mat_b, mat_c;
+    printk("Process accessing: %s and PID is %i \n", current->comm, current->pid);
+	//printk("PID in send task is: %d, tgid: %d \n",p->pid, p->tgid);
+    
     copy_from_user(&kernel_cmd, user_cmd, sizeof(kernel_cmd)); 
+    //    size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(int);
 
-    //int m = user_cmd->m;
-    //int n = user_cmd->n;
-    //int k = user_cmd->k;
+    //mat_a = kmalloc(mat_size, GFP_KERNEL);
+    mat_b = kmalloc(mat_size, GFP_KERNEL);
+    //mat_c = kmalloc(mat_size, GFP_KERNEL);
+    printk("I got: %zu bytes of memory\n", ksize(mat_b));
     
-    int row = 0;
-    int *mat_a; // *mat_b, *mat_c;
-    printk("size of point mata: %zu ",ksize(mat_a));
+    //copy_from_user(mat_a, (void *)kernel_cmd.a, mat_size);
+    copy_from_user(mat_b, (void *)kernel_cmd.b, mat_size);
+    //copy_from_user(mat_c, (void *)kernel_cmd.c, mat_size);
 
-    size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(int);
-    mat_a = kmalloc(mat_size, GFP_KERNEL);
-    //mat_b = (int *)kmalloc(128*128*sizeof(int), GFP_KERNEL);
-    //mat_c = (int *)kmalloc(128*128*sizeof(int), GFP_KERNEL);
-
-    //kernel_cmd.a = (__u64)a;
-    //kernel_cmd.b = (__u64)b;
-    //kernel_cmd.c = (__u64)c;
-    //kernel_cmd.tid = (__u64)task_id;
-
-    //op_address = (float *)(user_cmd->a);
-    /*
-    for(row=0;row<128;row++){
-        copy_from_user(&(a[row]), &(((int *)(user_cmd->a))[row*n]), sizeof(int)*128);
-        copy_from_user(&(b[row]), &(((int *)(user_cmd->b))[row*n]), sizeof(int)*128);
-        copy_from_user(&(c[row]), &(((int *)(user_cmd->c))[row*n]), sizeof(int)*128);
+    if (debug)
+    {
+        printk(KERN_INFO "\n address of a in user space %lld add of b: %lld \n", kernel_cmd.a, kernel_cmd.b);
+        printk("value of first value of matix B: %d, %d, %d, %d", *mat_b, *(mat_b+1), *(mat_b+2), *(mat_b+127));
     }
-    */
     
-    copy_from_user(mat_a, (void *)kernel_cmd.a, mat_size);
-    //resb= copy_from_user(mat_b, (void *)kernel_cmd.b, mat_size);
-    //resc= copy_from_user(mat_c, (void *)kernel_cmd.c, mat_size);
+    push_queue(kernel_cmd, mat_b); // mat_a, mat_b, mat_c);
+	printk("task pushed for pid %d \n", current->pid);
 
-    printk(KERN_INFO "\n Probably copy worked %lld %lld %lld \n", kernel_cmd.m, kernel_cmd.n, kernel_cmd.k);
-    printk("value of first value of matix A: %d, %d, %d, %d", *mat_a, *(mat_a+1), *(mat_a+2), *(mat_a+127));
-    printk("address of a %lld ", mat_a);
-
-    printk("I got: %zu bytes of memory\n", ksize(mat_a));
-
-    //task_queue = queue_init();
-    push_queue(&kernel_cmd, mat_a) ;//, &mat_b, &mat_c);
-
-
-    //deallocating memory
-    kfree(mat_a);
-    printk("size of point mata: %zu", ksize(mat_a));
-    //kfree(mat_a);
-    //printk("size of point mata: %zu", ksize(mat_a));
-	//kfree(mat_b);
-	//kfree(mat_c); 
-	printk("Memory released! \n");
-
-    //incomplete_task++;
-    //printk(KERN_INFO "\n No error push\n");
-    //printk("task_id: %d", (int)task_id);
-    // pop_queue(sample_queue);
-    // printk(KERN_INFO "\n No error pop 02-22-2022\n");
     return 0;
 }
 
@@ -195,11 +160,48 @@ long blockmma_send_task(struct blockmma_cmd __user *user_cmd)
  */
 int blockmma_sync(struct blockmma_cmd __user *user_cmd)
 {
-   // printk("sync incomplete_task: %d", incomplete_task);
-    // if(incomplete_task>0){
-    //     return -1;
-    // }
-    // return 0;
+
+	printk("\n ---------- Inside sync -------------- \n");
+    ///* Go through the list and free the memory. */
+
+    printk("Copying tasks to user space");
+    list_for_each_entry_safe(ptr, &task_queue)
+    {
+        node=list_entry(ptr, struct k_list, queue_list);  //returns address of list in current sructure
+    
+        if (debug)
+        {
+            printk(KERN_INFO "PID is %d and task id:  %d   \n ", node->proc.pid, node->tsk_id);
+            printk(KERN_INFO "address of b  in user space  %lld,  %lld, kernel space: %lld ", node->kernel_cmd_d.c, node->mat_b_d);
+            printk("value: %d %d %d %d  \n ",  *(node->mat_b_d), *(node->mat_b_d +1), *(node->mat_b_d+2), *(node->mat_b_d+3));
+            printk("\n");
+        }
+
+        if (node->proc.pid == current->pid)
+        {
+            copy_to_user((int *)node->kernel_cmd_d.b, (int *)node->mat_b_d, mat_size);
+            printk("Copied to user space ! ");
+
+            printk("size of point read before mat_b kfree: %zu", ksize(read->mat_b_d));
+            //kfree(node->mat_a_d);
+            kfree(node->mat_b_d);
+            //kfree(node->mat_c_d);
+            kfree(node->kernel_cmd_d);
+            printk("size of point read before mat_b kfree: %zu", ksize(read->mat_b_d));
+
+            list_del(&node->queue_list);
+            kfree(node);
+            node=NULL;
+            printk("size of point read after kfree: %zu \n", ksize(read));
+            count--;
+
+        }
+    }   
+
+	printk("Check if list is empty! \n ");
+	printk("list empty: %d",  list_empty(&task_queue));
+	printk("Done sync! \n");
+
     return 0;
 }
 
@@ -221,6 +223,19 @@ int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd)
     printk("get_task task_id: %d", (int)(task->tid));
     return (int)(task->tid);
     */
+    if (list_empty(&task_queue)!=0) //non zero-> empty
+	{
+        return -1;
+    }
+	//grab first task in queue
+    list_for_each(ptr,&task_queue)
+    {
+        node=list_entry(ptr, struct k_list, queue_list);  //returns address of list in current sructure
+        printk(KERN_INFO "\n task id:  %d   \n ", entry->tsk_id);
+        //printk(KERN_INFO "\n address of b  %lld , value: %d %d \n ", node->kernel_cmd_d->b, *(node->mat_b_d), *(node->mat_b_d +1));
+        //printk("mat b address in user space: %lld, in kernel space: %lld, mat_b values: %d %d \n", node->kernel_cmd_d->b, node->mat_b_d, *(node->mat_b_d), *(node->mat_b_d +1));
+
+    } 
 
     return 0;
 }
