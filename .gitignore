@@ -1,0 +1,11 @@
+# Ignore everything
+*
+
+# But not these files...
+!.gitignore
+!*/library/blockmma.h
+!*/library/blockmma.c
+!*/kernel_module/src/core.h
+!*/kernel_module/src/core.c
+!*/benchmark/accelerators.c
+!*/benchmark/benchmark.c

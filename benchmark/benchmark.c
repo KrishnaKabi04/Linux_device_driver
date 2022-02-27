@@ -108,6 +108,7 @@ int main(int argc, char *argv[])
   printf("KK address of b[1]: %lld,  %p,  0x%x \n", &b[1], &b[1], &b[1]);
   printf("KK value of b[0]: %d, b[1]: %d b[2]: %d b[3]: %d b[4]:  %d \n", b[0], b[1], b[2], b[3], b[4]);
   
+  //test
   // Accelerated BLOCKMM
   blockmma(devfd, a, b, c, ARRAY_SIZE, ARRAY_SIZE, ARRAY_SIZE);
 
