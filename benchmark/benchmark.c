@@ -64,6 +64,8 @@ int main(int argc, char *argv[])
     printf("Page size is : %d \n", pagesize);
     pid_t ppid_before_fork = getpid();
     // takes arguments from command line interface.
+
+    /*
     devfd = open("/dev/blockmma", O_RDWR);
     if (argc > 1)
     {
@@ -74,16 +76,18 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Device open failed");
         exit(1);
     }
+
+    */
   srand((unsigned) time(&t));
   a = (int *)memalign(pagesize, (ARRAY_SIZE*ARRAY_SIZE*sizeof(int *)/pagesize) * pagesize + 1);
   for(i = 0; i < ARRAY_SIZE*ARRAY_SIZE; i++)
   {
-      a[i] = (i+1)*2; 
+      a[i] = i; //rand()
   }
   b = (int *)memalign(pagesize, (ARRAY_SIZE*ARRAY_SIZE*sizeof(int *)/pagesize) * pagesize + 1);
   for(i = 0; i < ARRAY_SIZE*ARRAY_SIZE; i++)
   {
-      b[i] = (i+1)*3; //rand();
+      b[i] = i; //rand();
   }
   c = (int *)memalign(pagesize, (ARRAY_SIZE*ARRAY_SIZE*sizeof(int *)/pagesize) * pagesize + 1);
   for(i = 0; i < ARRAY_SIZE*ARRAY_SIZE; i++)
@@ -97,27 +101,23 @@ int main(int argc, char *argv[])
   memcpy(validate_b, b, ARRAY_SIZE*ARRAY_SIZE*sizeof(int *));
   memcpy(validate_c, c, ARRAY_SIZE*ARRAY_SIZE*sizeof(int *));
   
-  printf("KK a[0]: %d \n", a[0]);
-  printf("KK a[1]: %d \n", a[1]);
-    printf("KK a[5]: %d \n", a[5]);
-  printf("KK address of a[0]: %lld , pointer: %p \n", &a[0],  &a[0]);
-  printf("KK: add a[1] %lld , pointer: %p \n", &a[1], &a[1]);
-  printf("KK: add of a  %lld, %p, value of a: %d \n", &a, &a, *a);
 
-  printf("KK address of b[0]: %lld,  %p,  0x%x \n", &b[0], &b[0], &b[0]);
-  printf("KK address of b[1]: %lld,  %p,  0x%x \n", &b[1], &b[1], &b[1]);
-  printf("KK value of b[0]: %d, b[1]: %d b[2]: %d b[3]: %d b[4]:  %d \n", b[0], b[1], b[2], b[3], b[4]);
+  printf("KK value of a[0]: %d, a[1]: %d a[2]: %d a[126]: %d a[127]:  %d \n", a[0], a[1], a[2], a[126], a[127]);
+  printf("value of first value of matix B: b= %d,  b[1]= %d, b[126]= %d, b[127]=%d b[128]= %d \n", *b, *(b+1), *(b+126), *(b+127), *(b+128));
+  printf(" b[127-127]: %d  %d \n", *(b + 127*128+127), b[127*128+127]);
+  printf("KK value of b[0]: %d, b[1]: %d b[2]: %d b[126]: %d b[127]:  %d, B[126][0]: %d b[127][0]: %d \n", b[0], b[1], b[2], b[126], b[127], b[126*128+0], b[127*128+0]);
   
-  //test
+  // CPU BLOCKMM
+  blockmm(validate_a, validate_b, validate_c, ARRAY_SIZE, ARRAY_SIZE, ARRAY_SIZE);
+  printf("KK value of validate_c c[0]: %d, c[1]: %d c[2]: %d c[3]: %d c[127]:  %d \n", validate_c[0], validate_c[1], validate_c[2], validate_c[3], validate_c[127]);
+
   // Accelerated BLOCKMM
   blockmma(devfd, a, b, c, ARRAY_SIZE, ARRAY_SIZE, ARRAY_SIZE);
 
   printf("Accelartor computation completed \n");
-  printf("KK value of b[0]: %d, b[1]: %d b[2]: %d b[3]: %d b[4]:  %d \n", b[0], b[1], b[2], b[3], b[4]);
+  printf("KK value of C: c[0]: %d, c[1]: %d c[2]: %d c[3]: %d c[127]:  %d \n", c[0], c[1], c[2], c[3], c[127]);
 
 
-  // CPU BLOCKMM
-  blockmm(validate_a, validate_b, validate_c, ARRAY_SIZE, ARRAY_SIZE, ARRAY_SIZE);
   for(i = 0; i < ARRAY_SIZE; i++)
   {
     for(j = 0; j < ARRAY_SIZE; j++)
@@ -131,7 +131,7 @@ int main(int argc, char *argv[])
   }
   printf("Passed\n");
   exit(1);
-    return 0;
+  return 0;
 }
 
 //CPU call
