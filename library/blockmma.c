@@ -157,9 +157,8 @@ int blockmma_sync(int devfd)
     return 0;
 }
 
-int counter = 0;
 void sigquit();
-
+int counter=0;
 // This is the function emulating the effect of hardware accelerated 128x128 
 // matrix multiplications.
 int blockmma_f128_accelerator(int devfd)
@@ -176,18 +175,18 @@ int blockmma_f128_accelerator(int devfd)
     cmd.b = (__u64)b;
     cmd.c = (__u64)c;
     signal(SIGQUIT, sigquit); //terminate a  process
-    int ctr=1;
+    //int ctr=1;
 
     printf("------------------ accelerator---------------\n");
 
     while(1)
     {
-        printf("ctr: %d \n", ctr);
-        ctr= ctr+1;
+        //printf("ctr: %d \n", ctr);
+        //ctr= ctr+1;
 
-        if((tid=ioctl(devfd, BLOCKMMA_IOCTL_GET_TASK, &cmd))>=0) //makes sure data is mapped to .. queue2 : data from kernel
+        if((tid=ioctl(devfd, BLOCKMMA_IOCTL_GET_TASK, &cmd))>=0) 
         {
-            
+
             printf("fetch value of matrix b: %d, %d, %d, %d \n", b[0], b[1], b[2], b[127]);
             for(i = 0; i < 128; i++)
                 for(j = 0; j < 128; j++)
@@ -200,10 +199,9 @@ int blockmma_f128_accelerator(int devfd)
             b[3]=124;
             ioctl(devfd, BLOCKMMA_IOCTL_COMP, &cmd);
             counter++;
-            if (ctr==4)return 0;
+            return 0;
         }
     }
-    exit(1);
     return 0;
 }
 
