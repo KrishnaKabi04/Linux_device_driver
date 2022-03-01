@@ -63,7 +63,7 @@ int blockmma(int devfd, int *a, int *b, int *c, int M, int N, int K)
       }
 
       blockmma_sync(devfd); //copy data back to user-space ? free memory
-      return 0;
+      //return 0;
     }
   }  
 
@@ -187,7 +187,7 @@ int blockmma_f128_accelerator(int devfd)
         if((tid=ioctl(devfd, BLOCKMMA_IOCTL_GET_TASK, &cmd))>=0) 
         {
 
-            printf("fetch value of matrix b: %d, %d, %d, %d \n", b[0], b[1], b[2], b[127]);
+            //printf("fetch value of matrix b: %d, %d, %d, %d \n", b[0], b[1], b[2], b[127]);
             for(i = 0; i < 128; i++)
                 for(j = 0; j < 128; j++)
                     for(k = 0; k < 128; k++)
@@ -195,13 +195,14 @@ int blockmma_f128_accelerator(int devfd)
             cmd.tid = tid;
             //printf("Copy to user var : %d \n", cmd.tid);
             //printf("fetch value of matrix c: %d, %d, %d, %d ", c[0], c[1], c[2], c[127]);
-            b[2]= 123;
-            b[3]=124;
+            //b[2]= 123;
+            //b[3]=124;
             ioctl(devfd, BLOCKMMA_IOCTL_COMP, &cmd);
             counter++;
-            return 0;
+
         }
     }
+    exit(1);
     return 0;
 }
 
