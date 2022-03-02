@@ -64,8 +64,6 @@ int main(int argc, char *argv[])
     printf("Page size is : %d \n", pagesize);
     pid_t ppid_before_fork = getpid();
     // takes arguments from command line interface.
-
-    /*
     devfd = open("/dev/blockmma", O_RDWR);
     if (argc > 1)
     {
@@ -76,8 +74,8 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Device open failed");
         exit(1);
     }
+  
 
-    */
   srand((unsigned) time(&t));
   a = (int *)memalign(pagesize, (ARRAY_SIZE*ARRAY_SIZE*sizeof(int *)/pagesize) * pagesize + 1);
   for(i = 0; i < ARRAY_SIZE*ARRAY_SIZE; i++)
@@ -107,15 +105,18 @@ int main(int argc, char *argv[])
   printf(" b[127-127]: %d  %d \n", *(b + 127*128+127), b[127*128+127]);
   printf("KK value of b[0]: %d, b[1]: %d b[2]: %d b[126]: %d b[127]:  %d, B[126][0]: %d b[127][0]: %d \n", b[0], b[1], b[2], b[126], b[127], b[126*128+0], b[127*128+0]);
   
-  // CPU BLOCKMM
-  blockmm(validate_a, validate_b, validate_c, ARRAY_SIZE, ARRAY_SIZE, ARRAY_SIZE);
-  printf("KK value of validate_c c[0]: %d, c[1]: %d c[2]: %d c[3]: %d c[127]:  %d \n", validate_c[0], validate_c[1], validate_c[2], validate_c[3], validate_c[127]);
 
   // Accelerated BLOCKMM
   blockmma(devfd, a, b, c, ARRAY_SIZE, ARRAY_SIZE, ARRAY_SIZE);
 
   printf("Accelartor computation completed \n");
   printf("KK value of C: c[0]: %d, c[1]: %d c[2]: %d c[3]: %d c[127]:  %d \n", c[0], c[1], c[2], c[3], c[127]);
+
+
+
+  // CPU BLOCKMM
+  blockmm(validate_a, validate_b, validate_c, ARRAY_SIZE, ARRAY_SIZE, ARRAY_SIZE);
+  printf("KK value of validate_c c[0]: %d, c[1]: %d c[2]: %d c[3]: %d c[127]:  %d \n", validate_c[0], validate_c[1], validate_c[2], validate_c[3], validate_c[127]);
 
 
   for(i = 0; i < ARRAY_SIZE; i++)

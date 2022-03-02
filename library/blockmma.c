@@ -41,12 +41,11 @@ int blockmma(int devfd, int *a, int *b, int *c, int M, int N, int K)
     {
       for(k = 0; k < K; k+=128)
       {
+
         blockmma_f128(devfd, &a[i*N+j], &b[j*K+k], &c[i*K+k], M, N, K, 128); //0 0 0 
                                                                               //0 128 [0 128 256 ...]   : queue : FIFO workqueue, tasklet 
       }
-
       blockmma_sync(devfd); //copy data back to user-space ? free memory
-      //return 0;
     }
   }  
 
@@ -107,6 +106,17 @@ int blockmma_f128(int devfd, int *a, int *b, int *c, int m, int n, int k, int ti
     cmd.k = (__u64)k; //256*256
     cmd.tile = (__u64)tile;
 
+    /*
+    int *y= (void *)cmd.b;
+
+    printf("cmd b: %lld y[0] %d y[1] %d \n", y, *y, *(y+1));
+    y= y + 128;
+    printf("cmd b: %lld y[0] %d y[1] %d \n", y, *y, *(y+1));
+    y= y + 128;
+    printf("cmd b: %lld y[0] %d y[1] %d \n", y, *y, *(y+1));
+    */
+
+    printf("Adding task to send queue \n");
     while(ioctl(devfd, BLOCKMMA_IOCTL_SEND_TASK, &cmd)== -1); // the ioctl func needs to return an exit code to break loop on success
     return 0;
 }
@@ -155,7 +165,7 @@ int blockmma_f128_accelerator(int devfd)
                         c[i*128+j] += a[i*128+k]*b[k*128+j]; //acc
             cmd.tid = tid;
             //printf("Copy to user var : %d \n", cmd.tid);
-            printf("fetch value of matrix c: %d, %d, %d, %d , %d", c[0], c[1], c[2], c[126], c[127]);
+            printf("fetch value of matrix c: c[0]: %d, c[1]: %d, c[2]: %d, c[32]: %d , c[126]: %d, c[127]: %d", c[0], c[1], c[2], c[32], c[126], c[127]);
             printf(" c[127x127]: %d  %d \n", *(c + 127*128+127), c[127*128+127]);
             // (__u64)a[0]
             //b[2]= 123;
