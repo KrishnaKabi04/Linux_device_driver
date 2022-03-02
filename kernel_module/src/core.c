@@ -300,13 +300,18 @@ int blockmma_sync(struct blockmma_cmd __user *user_cmd)
                     kfree(node_sync->ker_mat_c);
                     //printk("size of point read before mat_b kfree: %zu", ksize(node_sync->ker_mat_b));
                     list_del(&node_sync->sync_queue);
-                    //kfree(node_sync);
+                    kfree(node_sync);
                     //node_sync=NULL;
 
                 }
             }
+            list_del(&s_node->sync_hash_list);
+            kfree(s_node);
+
+            printk("Deleted entry from hashmap and sync queue! \n");
             mutex_unlock(&sync_lock);
             mutex_unlock(&sync_hashmap_lock);
+            printk(" Done sync ! \n");
             return 0;
         }
 
@@ -380,8 +385,12 @@ int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd)
 
     //remove from task_queue_list
     list_del(&entry->task_queue);
+    //list_move_tail(&entry,  &comp_head);
+    kfree(entry);
+    printk("Deleted entry from task queue in get task \n ");
     mutex_unlock(&send_lock);
 
+    /*
     if (debug)
     {
         printk("check for other elemenst in task_queue list! \n");
@@ -403,7 +412,7 @@ int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd)
             printk("value: %d %d %d %d  \n ",  *(node_get->ker_mat_b), *(node_get->ker_mat_b +1), *(node_get->ker_mat_b+2), *(node_get->ker_mat_b+3));
         }
         mutex_unlock(&comp_lock);
-    }
+    }*/
 
     return entry->tsk_id; 
     //return 0;
@@ -437,7 +446,6 @@ int blockmma_comp(struct blockmma_hardware_cmd __user *user_cmd)
             printk("\n");
         }
 
-
         if (entry->hw_pid == current->pid)
         {
             
@@ -447,9 +455,20 @@ int blockmma_comp(struct blockmma_hardware_cmd __user *user_cmd)
                 printk("failed copying c from accelrator into kern !! ");
                 printk("failed bytes: %d", (int)res);
             }
-
+            printk("mat C address in user space: %lld, in kernel space: %lld, mat_c values: %d %d %d %d \n", entry->user.c, entry->ker_mat_c, *(entry->ker_mat_c), *(entry->ker_mat_c+1), *(entry->ker_mat_c+2), *(entry->ker_mat_c+126), *(entry->ker_mat_c+127));
             printk("Copied from hw space ! \n");
 
+            //add task to sync queue
+            mutex_lock(&sync_lock);
+            list_add_tail(&entry -> sync_queue, &sync_head); //adding to sync queue
+            mutex_unlock(&sync_lock);
+            
+            printk("mutex sync lock unloed in comp \n ");
+
+            list_del(&entry->comp_queue); //pop from comp_queue
+            kfree(entry);
+            printk("Deleted entry from comp queue in comp function \n ");
+            
             //decrease count in sync_hash_map
             mutex_lock(&sync_hashmap_lock);
             list_for_each(ptr_sync,&sync_hashmap_head)
@@ -463,13 +482,8 @@ int blockmma_comp(struct blockmma_hardware_cmd __user *user_cmd)
                 }
             }        
             mutex_unlock(&sync_hashmap_lock);
-
-            mutex_lock(&sync_lock);
-            list_add_tail(&entry -> sync_queue, &sync_head); //adding to sync queue
-            mutex_unlock(&sync_lock);
             
-            list_del(&entry->comp_queue); //pop from comp_queue
-
+            /*
             if (debug)
             {
                 printk("check for other element in comp_queue list! \n");
@@ -491,12 +505,14 @@ int blockmma_comp(struct blockmma_hardware_cmd __user *user_cmd)
                     //printk(" Bench PID: %d task_count= %d \n ",  entry->bench_pid, entry->task_cnt);
                 } 
                 mutex_unlock(&sync_lock);
-            }
+            }*/
+
+            mutex_unlock(&comp_lock);
+            printk("comp lock unlocked! \n");
+            return 0;
         }
     }   
     mutex_unlock(&comp_lock);
-	//printk("Check if list is empty! \n ");
-	//printk("list empty: %d",  list_empty(&comp_head));
 	printk("Done Comp! \n");
    return 0;
 }

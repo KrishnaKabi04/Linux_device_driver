@@ -66,7 +66,6 @@ int blockmma_bonus(int devfd, int *a, int *b, int *c, int M, int N, int K)
     }
   }  
   blockmma_sync(devfd);
- 
   return 0;
 }
 
@@ -149,7 +148,6 @@ int blockmma_f128_accelerator(int devfd)
     cmd.b = (__u64)b;
     cmd.c = (__u64)c;
     signal(SIGQUIT, sigquit); //terminate a  process
-    //int ctr=1;
 
     printf("------------------ accelerator---------------\n");
 
@@ -158,18 +156,13 @@ int blockmma_f128_accelerator(int devfd)
         if((tid=ioctl(devfd, BLOCKMMA_IOCTL_GET_TASK, &cmd))>=0) 
         {
 
-            //printf("fetch value of matrix b: %d, %d, %d, %d \n", b[0], b[1], b[2], b[127]);
             for(i = 0; i < 128; i++)
                 for(j = 0; j < 128; j++)
                     for(k = 0; k < 128; k++)
                         c[i*128+j] += a[i*128+k]*b[k*128+j]; //acc
             cmd.tid = tid;
-            //printf("Copy to user var : %d \n", cmd.tid);
             printf("fetch value of matrix c: c[0]: %d, c[1]: %d, c[2]: %d, c[32]: %d , c[126]: %d, c[127]: %d", c[0], c[1], c[2], c[32], c[126], c[127]);
             printf(" c[127x127]: %d  %d \n", *(c + 127*128+127), c[127*128+127]);
-            // (__u64)a[0]
-            //b[2]= 123;
-            //b[3]=124;
             ioctl(devfd, BLOCKMMA_IOCTL_COMP, &cmd);
             counter++;
 

@@ -61,5 +61,6 @@ sleep 5
 ./accelerators_control "0.0.0.0" "q" 27072
 sleep 5
 
-comment
+
 sudo rmmod blockmma
+comment
