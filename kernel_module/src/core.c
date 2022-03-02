@@ -116,8 +116,8 @@ void push_queue(struct blockmma_cmd k_cmd, int *a, int *b, int *c) {
 
     //acq lock
     mutex_lock(&send_lock);
-    mutex_lock(&sync_hashmap_lock);
     list_add_tail(&node_send -> task_queue, &task_head);
+    mutex_lock(&sync_hashmap_lock);
     mutex_unlock(&send_lock);
     //release lock
 
@@ -138,9 +138,6 @@ void push_queue(struct blockmma_cmd k_cmd, int *a, int *b, int *c) {
                 s_entry->task_cnt= s_entry->task_cnt+1;
             }
     }
-    mutex_unlock(&sync_hashmap_lock);
-
-    mutex_lock(&sync_hashmap_lock);
     if (key_found==-1)
     {
         s_entry = kmalloc(sizeof(struct sync_hash_map * ), GFP_KERNEL); 
@@ -149,6 +146,7 @@ void push_queue(struct blockmma_cmd k_cmd, int *a, int *b, int *c) {
         list_add_tail( &s_entry -> sync_hash_list, &sync_hashmap_head);
     }
     mutex_unlock(&sync_hashmap_lock);
+
     //traverse the list
     if (debug){
         printk("Traversing the list \n");
@@ -302,8 +300,8 @@ int blockmma_sync(struct blockmma_cmd __user *user_cmd)
                     kfree(node_sync->ker_mat_c);
                     //printk("size of point read before mat_b kfree: %zu", ksize(node_sync->ker_mat_b));
                     list_del(&node_sync->sync_queue);
-                    kfree(node_sync);
-                    node_sync=NULL;
+                    //kfree(node_sync);
+                    //node_sync=NULL;
 
                 }
             }
