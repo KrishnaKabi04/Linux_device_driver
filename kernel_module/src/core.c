@@ -65,17 +65,19 @@ DEFINE_MUTEX(sync_hashmap_lock);
 DEFINE_MUTEX(task_cnt_lock);
 
 //Linked list node
+
 struct k_list {
     struct list_head task_queue; 
     struct list_head comp_queue;
     struct list_head sync_queue;
 
-    int m, n, k; //pushed in send task -- user space address // pushed in get task -- hardware space address
+    struct blockmma_cmd user; //pushed in send task -- user space address
+    struct blockmma_hardware_cmd hw_cmd_d; // pushed in get task -- hardware space address
     int *ker_mat_a, *ker_mat_b, *ker_mat_c; //kernel space
-    __u64 user_add_c;
     int bench_pid, hw_pid, tsk_id;
 
 };
+
 
 struct sync_hash_map{
     struct list_head sync_hash_list;
@@ -92,7 +94,7 @@ LIST_HEAD(sync_hashmap_head);
 static int global_tsk_count=0;
 static size_t mat_size = (128 * 128)*sizeof(int);
 
-void push_queue(struct blockmma_cmd *k_cmd, int *a, int *b, int *c) {
+void push_queue(struct blockmma_cmd k_cmd, int *a, int *b, int *c) {
 
     struct k_list *node_send;
     struct sync_hash_map *s_entry;
@@ -102,12 +104,10 @@ void push_queue(struct blockmma_cmd *k_cmd, int *a, int *b, int *c) {
     global_tsk_count= global_tsk_count+1;
     mutex_unlock(&task_cnt_lock);
     
-    node_send = kmalloc(sizeof(struct k_list * ), GFP_KERNEL); 
-    printk("size of point node_send after allocation: %zu", ksize(node_send));
-    node_send -> user_add_c = k_cmd->c;
-    node_send -> m = k_cmd->m;
-    node_send -> n = k_cmd->n;
-    node_send -> k = k_cmd->k;
+
+    node_send = kmalloc(sizeof(struct k_list ), GFP_KERNEL); 
+    //printk("size of point node_send after allocation: %zu", ksize(node_send));
+    node_send -> user = k_cmd;
     node_send -> ker_mat_a= a;
     node_send -> ker_mat_b= b;
     node_send -> ker_mat_c= c;
@@ -119,7 +119,8 @@ void push_queue(struct blockmma_cmd *k_cmd, int *a, int *b, int *c) {
     list_add_tail(&node_send -> task_queue, &task_head);
     mutex_lock(&sync_hashmap_lock);
     mutex_unlock(&send_lock);
-    //release lockv
+    //release lock
+
 
     int key_found=-1;
 
@@ -139,12 +140,33 @@ void push_queue(struct blockmma_cmd *k_cmd, int *a, int *b, int *c) {
     }
     if (key_found==-1)
     {
-        s_entry = kmalloc(sizeof(struct sync_hash_map * ), GFP_KERNEL); 
+        s_entry = kmalloc(sizeof(struct sync_hash_map ), GFP_KERNEL); 
         s_entry->bench_pid= current->pid;
         s_entry->task_cnt= 1;
         list_add_tail( &s_entry -> sync_hash_list, &sync_hashmap_head);
     }
     mutex_unlock(&sync_hashmap_lock);
+
+    //traverse the list
+    if (debug){
+        printk("Traversing the list \n");
+
+        //acquire lock: task_queue
+        mutex_lock(&send_lock);
+        list_for_each(ptr_send,&task_head)
+        {
+            node_send=list_entry(ptr_send, struct k_list, task_queue);  
+            printk(KERN_INFO "task id:  %d   \n ", node_send->tsk_id);
+            printk(KERN_INFO "address of b  in user space %lld , kernel space: %lld, value: %d %d \n ", node_send->user.b, node_send->ker_mat_b, *(node_send->ker_mat_b), *(node_send->ker_mat_b +1));
+    	    //*(node_send->ker_mat_b) = 444;
+		    //*(node_send->ker_mat_b+1)=445;
+
+        }
+        mutex_unlock(&send_lock);  
+        //release lock 
+
+    }
+
 
 }
 
@@ -156,57 +178,72 @@ void push_queue(struct blockmma_cmd *k_cmd, int *a, int *b, int *c) {
 long blockmma_send_task(struct blockmma_cmd __user *user_cmd)
 {
 
-    struct blockmma_cmd *user;
+    struct blockmma_cmd user;
     int *mat_a, *mat_b, *mat_c;
-    int res, row=0;
-    __u64 user_c_add;
 
-    printk("Benchmark Process PID is %i \n",current->pid);
-    user = kmalloc(sizeof(struct blockmma_cmd), GFP_KERNEL);
-    res=copy_from_user(user, user_cmd, sizeof(user)); 
-    if(res != 0){
-        printk("failed copying user cmd into kern in send task \n ");
-        printk("failed bytes: %d", (int)res);
-    }
-
-    printk(KERN_INFO "\n address of a in user space %lld add of b: %lld add of c: %lld \n", user->a, user->b, user->c);
+    printk("Process accessing: %s and PID is %i \n", current->comm, current->pid);
+    copy_from_user(&user, user_cmd, sizeof(user)); 
+    //size_t mat_size = ( kernel_cmd.tile * kernel_cmd.tile)*sizeof(int);
 
     mat_a = kmalloc(mat_size, GFP_KERNEL);
     mat_b = kmalloc(mat_size, GFP_KERNEL);
     mat_c = kmalloc(mat_size, GFP_KERNEL);
+    
+    //copy_from_user(mat_a, (void *)user.a, mat_size);
+    //copy_from_user(mat_b, (void *)user.b, mat_size);
+    //copy_from_user(mat_c, (void *)user.c, mat_size); 
+
+    int res, row=0;
+    
+    /*
+    res = copy_from_user(mat_a, (int *)user.a, sizeof(int)*128*128);
+    if(res != 0){
+        printk("failed copying a into kern");
+        printk("failed bytes: %d", (int)res);
+    }
+    res = copy_from_user(mat_b, (int *)user.b, sizeof(int)*128*128);
+    if(res != 0){
+        printk("failed copying b into kern");
+        printk("failed bytes: %d", (int)res);
+    }
+    res = copy_from_user(mat_c, (int *)user.c, sizeof(int)*128*128);
+    if(res != 0){
+        printk("failed copying c into kern");
+        printk("failed bytes: %d", (int)res);
+    }
+    */
 
     for(row=0;row<128;row++)
     {   
-        res = copy_from_user(mat_a+(row*128), (int *)(__u64)user->a+(row*user->n), sizeof(int)*128);
+        res = copy_from_user(mat_a+(row*128), (int *)user.a+(row*user.n), sizeof(int)*128);
         if(res != 0){
             printk("failed copying a into kern");
             printk("failed bytes: %d", (int)res);
         }
 
-        res = copy_from_user(mat_b+(row*128), (int *)(__u64)user->b+(row*user->k), sizeof(int)*128);
+        res = copy_from_user(mat_b+(row*128), (int *)user.b+(row*user.k), sizeof(int)*128);
         if(res != 0){
             printk("failed copying b into kern");
             printk("failed bytes: %d", (int)res);
         }
 
-        res = copy_from_user(mat_c+(row*128), (int *)(__u64)user->c+(row*user->k), sizeof(int)*128);
+        res = copy_from_user(mat_c+(row*128), (int *)user.c+(row*user.k), sizeof(int)*128);
         if(res != 0){
             printk("failed copying c into kern");
             printk("failed bytes: %d", (int)res);
         }
     }
+    
 
     if (debug)
     {
-        printk(KERN_INFO "\n address of a in user space %lld add of b: %lld add of c: %lld \n", user->a, user->b, user->c);
+        printk(KERN_INFO "\n address of a in user space %lld add of b: %lld add of c: %lld \n", user.a, user.b, user.c);
         printk("value of first value of matix B: b[0]= %d, b[1]= %d, b[2]= %d, b[126]= %d, b[127]= %d \n", *mat_b, *(mat_b+1), *(mat_b+2), *(mat_b+126), *(mat_b+127));
         printk(" b[127-127]: %d  %d \n", *(mat_b + 127*128+127), mat_b[127*128+127]);
         printk("value of first value of matix C: c[0]= %d, c[1]= %d, c[2]= %d, c[126]= %d, c[127]= %d \n", *mat_c, *(mat_c+1), *(mat_c+2), *(mat_c+126), *(mat_c+127));
     }
     
     push_queue(user, mat_a, mat_b, mat_c);
-    kfree(user);
-
 	printk("task pushed for pid %d \n", current->pid);
 
     return 0;
@@ -219,15 +256,16 @@ int blockmma_sync(struct blockmma_cmd __user *user_cmd)
 {
 
     struct k_list *node_sync, *temp;
-    struct sync_hash_map * s_node;
+    struct sync_hash_map * s_node, *s_temp;
     struct list_head  *ptr_sync;
     int k, res, row=0;
+    int *curr_user_add_c;
 
     //iterate through sync_hash_map_queue and check task_count for your pid:
     mutex_lock(&sync_hashmap_lock);
-    list_for_each(ptr_sync, &sync_hashmap_head)
+    list_for_each_entry_safe(s_node, s_temp, &sync_hashmap_head, sync_hash_list)
     {
-        s_node=list_entry(ptr_sync, struct sync_hash_map, sync_hash_list);  //returns address of list in current sructure
+        //s_node=list_entry(ptr_sync, struct sync_hash_map, sync_hash_list);  //returns address of list in current sructure
 
         if ((s_node->bench_pid == current->pid) & (s_node->task_cnt == 0) )
         {
@@ -239,14 +277,14 @@ int blockmma_sync(struct blockmma_cmd __user *user_cmd)
                 if (node_sync->bench_pid == current->pid)
                 {
 
-                    printk(KERN_INFO "address of c  in user space in sync %lld,  kernel space: %lld ", node_sync->user_add_c, node_sync->ker_mat_c);
+                    printk(KERN_INFO "address of c  in user space in sync %lld,  kernel space: %lld ", node_sync->user.c, node_sync->ker_mat_c);
                     printk("value of c in sync: c[0] %d  c[1] %d c[31] %d c[32] %d \n ",  *(node_sync->ker_mat_c), *(node_sync->ker_mat_c +1), *(node_sync->ker_mat_c+31), *(node_sync->ker_mat_c+32));
                     
                     row = 0;
-                    k= node_sync->k;
+                    k= node_sync->user.k;
                     //copy_from_user(mat_c+(row*128), (int *)kernel_cmd.c+(row*kernel_cmd.k), sizeof(int)*128);
                     for(row=0;row<128;row++){
-                        res=copy_to_user(((int *)node_sync->user_add_c)+(row*k), ((int *)node_sync->ker_mat_c)+(row*128), sizeof(int)*128);
+                        res=copy_to_user(((int *)node_sync->user.c)+(row*k), ((int *)node_sync->ker_mat_c)+(row*128), sizeof(int)*128);
                         if(res != 0){
                             printk("failed copying result matrix c back to user! ");
                             printk("failed bytes: %d", (int)res);
@@ -289,8 +327,8 @@ int blockmma_sync(struct blockmma_cmd __user *user_cmd)
 
 int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd)
 {
-    struct blockmma_hardware_cmd *hw_cmd;
-    int res, return_tsk_id;
+    struct blockmma_hardware_cmd hw_cmd;
+    int res;
     
     //acquire lock: task_queue??
     mutex_lock(&send_lock); 
@@ -302,11 +340,11 @@ int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd)
     }
     mutex_unlock(&send_lock);
 
-    struct k_list *entry;
+    struct k_list *entry, *node_get, *temp;
+    struct list_head  *ptr_get, *ptr_comp ;
 
     printk("inside get task \n");
-    hw_cmd= kmalloc(sizeof(struct blockmma_hardware_cmd ), GFP_KERNEL);
-    res=copy_from_user(hw_cmd, user_cmd, sizeof(hw_cmd)); //handle error
+    res=copy_from_user(&hw_cmd, user_cmd, sizeof(hw_cmd)); //handle error
     if(res != 0){
         printk("failed copying hw_cmd from acc to kernel !! ");
         printk("failed bytes: %d", (int)res);
@@ -317,20 +355,20 @@ int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd)
     entry = list_first_entry(&task_head, struct k_list, task_queue);
 
     printk(KERN_INFO "\n Benchmark PID: %d, task id:  %d   \n ", entry->bench_pid, entry->tsk_id);
-    //printk("mat B address in user space: %lld, in kernel space: %lld, mat_b values: %d %d %d %d \n", entry->user.b, entry->ker_mat_b, *(entry->ker_mat_b), *(entry->ker_mat_b +1), *(entry->ker_mat_b +126), *(entry->ker_mat_b +127));
-    printk("mat C address in user space: %lld, in kernel space: %lld, mat_c values: %d %d %d %d \n", entry->user_add_c, entry->ker_mat_c, *(entry->ker_mat_c), *(entry->ker_mat_c+1), *(entry->ker_mat_c+2), *(entry->ker_mat_c+126), *(entry->ker_mat_c+127));
+    printk("mat B address in user space: %lld, in kernel space: %lld, mat_b values: %d %d %d %d \n", entry->user.b, entry->ker_mat_b, *(entry->ker_mat_b), *(entry->ker_mat_b +1), *(entry->ker_mat_b +126), *(entry->ker_mat_b +127));
+    printk("mat C address in user space: %lld, in kernel space: %lld, mat_c values: %d %d %d %d \n", entry->user.c, entry->ker_mat_c, *(entry->ker_mat_c), *(entry->ker_mat_c+1), *(entry->ker_mat_c+2), *(entry->ker_mat_c+126), *(entry->ker_mat_c+127));
 
-    res=copy_to_user((int *)(__u64)hw_cmd->a, (int *)entry->ker_mat_a, mat_size);
+    res=copy_to_user((void *)hw_cmd.a, (void *)entry->ker_mat_a, mat_size);
     if(res != 0){
         printk("failed copying a from kernel to acc !! ");
         printk("failed bytes: %d", (int)res);
     }
-    res= copy_to_user((int *)(__u64)hw_cmd->b, (int *)entry->ker_mat_b, mat_size);
+    res= copy_to_user((void *)hw_cmd.b, (void *)entry->ker_mat_b, mat_size);
     if(res != 0){
         printk("failed copying b from kernel into acc !! ");
         printk("failed bytes: %d", (int)res);
     }
-	res= copy_to_user((int *)(__u64)hw_cmd->c, (int *)entry->ker_mat_c, mat_size);
+	res= copy_to_user((void *)hw_cmd.c, (void *)entry->ker_mat_c, mat_size);
     if(res != 0){
         printk("failed copying c from kernel to acc !! ");
         printk("failed bytes: %d", (int)res);
@@ -338,7 +376,7 @@ int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd)
     printk("Copy to hardware success! \n");
 
     //add the current node details to another queue and pop from current queue
-    kfree(hw_cmd);
+    entry->hw_cmd_d = hw_cmd;
     entry->hw_pid = current->pid;
     mutex_lock(&comp_lock);
     list_add_tail(&entry -> comp_queue, &comp_head);
@@ -346,7 +384,6 @@ int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd)
 
 
     //remove from task_queue_list
-    return_tsk_id= entry->tsk_id;
     list_del(&entry->task_queue);
     //list_move_tail(&entry,  &comp_head);
     //kfree(entry);
@@ -361,6 +398,7 @@ int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd)
         list_for_each(ptr_get, &task_head)
         {
             node_get=list_entry(ptr_get, struct k_list, task_queue);  //returns address of list in current sructure
+            printk(KERN_INFO "address of b  in user space  %lld,  kernel space: %lld ", node_get->user.b, node_get->ker_mat_b);
             printk("value: %d %d %d %d  \n ",  *(node_get->ker_mat_b), *(node_get->ker_mat_b +1), *(node_get->ker_mat_b+2), *(node_get->ker_mat_b+3));
         }
         mutex_unlock(&send_lock);
@@ -370,12 +408,13 @@ int blockmma_get_task(struct blockmma_hardware_cmd __user *user_cmd)
         list_for_each(ptr_comp,&comp_head)
         {
             node_get=list_entry(ptr_comp, struct k_list, comp_queue);  //returns address of list in current sructure
+            printk(KERN_INFO "address of b  in user space  %lld, kernel space: %lld ", node_get->user.b, node_get->ker_mat_b);
             printk("value: %d %d %d %d  \n ",  *(node_get->ker_mat_b), *(node_get->ker_mat_b +1), *(node_get->ker_mat_b+2), *(node_get->ker_mat_b+3));
         }
         mutex_unlock(&comp_lock);
     }*/
 
-    return return_tsk_id; 
+    return entry->tsk_id; 
     //return 0;
 }
 
@@ -389,7 +428,6 @@ int blockmma_comp(struct blockmma_hardware_cmd __user *user_cmd)
     struct sync_hash_map *s_entry;
     struct list_head  *ptr_sync, *ptr_comp ;
     int res;
-    __u64 result;
 
     printk("Entering comp for pid %d", current->pid);
     //might use read lock later
@@ -401,8 +439,8 @@ int blockmma_comp(struct blockmma_hardware_cmd __user *user_cmd)
         {
             printk(KERN_INFO "HW PID is %d and task id:  %d   \n ", entry->hw_pid, entry->tsk_id);
 
-            //printk("mat B address in user space: %lld, in kernel space: %lld, mat_b values: %d %d %d %d \n", entry->user.b, entry->ker_mat_b, *(entry->ker_mat_b), *(entry->ker_mat_b +1), *(entry->ker_mat_b +126), *(entry->ker_mat_b +127));
-            printk("mat C address in user space: %lld, in kernel space: %lld, mat_c values: %d %d %d %d \n", entry->user_add_c, entry->ker_mat_c, *(entry->ker_mat_c), *(entry->ker_mat_c+1), *(entry->ker_mat_c+2), *(entry->ker_mat_c+126), *(entry->ker_mat_c+127));
+            printk("mat B address in user space: %lld, in kernel space: %lld, mat_b values: %d %d %d %d \n", entry->user.b, entry->ker_mat_b, *(entry->ker_mat_b), *(entry->ker_mat_b +1), *(entry->ker_mat_b +126), *(entry->ker_mat_b +127));
+            printk("mat C address in user space: %lld, in kernel space: %lld, mat_c values: %d %d %d %d \n", entry->user.c, entry->ker_mat_c, *(entry->ker_mat_c), *(entry->ker_mat_c+1), *(entry->ker_mat_c+2), *(entry->ker_mat_c+126), *(entry->ker_mat_c+127));
 
             printk("entry->hw_pid: %d %d", entry->hw_pid, current->pid);
             printk("\n");
@@ -412,13 +450,12 @@ int blockmma_comp(struct blockmma_hardware_cmd __user *user_cmd)
         {
             
             //copy from hw to kernel
-            result= get_user(result, &user_cmd->c);
-            res= copy_from_user(entry->ker_mat_c, (int *)result, mat_size);
+            res= copy_from_user(entry->ker_mat_c, (void *)entry->hw_cmd_d.c, mat_size);
             if(res != 0){
                 printk("failed copying c from accelrator into kern !! ");
                 printk("failed bytes: %d", (int)res);
             }
-            printk("mat C address in user space: %lld, in kernel space: %lld, mat_c values: %d %d %d %d \n", entry->user_add_c, entry->ker_mat_c, *(entry->ker_mat_c), *(entry->ker_mat_c+1), *(entry->ker_mat_c+2), *(entry->ker_mat_c+126), *(entry->ker_mat_c+127));
+            printk("mat C address in user space: %lld, in kernel space: %lld, mat_c values: %d %d %d %d \n", entry->user.c, entry->ker_mat_c, *(entry->ker_mat_c), *(entry->ker_mat_c+1), *(entry->ker_mat_c+2), *(entry->ker_mat_c+126), *(entry->ker_mat_c+127));
             printk("Copied from hw space ! \n");
 
             //add task to sync queue
@@ -429,6 +466,7 @@ int blockmma_comp(struct blockmma_hardware_cmd __user *user_cmd)
             printk("mutex sync lock unloed in comp \n ");
 
             list_del(&entry->comp_queue); //pop from comp_queue
+            //kfree(entry);
             printk("Deleted entry from comp queue in comp function \n ");
             
             //decrease count in sync_hash_map
@@ -511,4 +549,3 @@ void blockmma_exit(void)
     printk("BlockMMA removed\n");
     misc_deregister(&blockmma_dev);
 }
-

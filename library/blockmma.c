@@ -115,7 +115,6 @@ int blockmma_f128(int devfd, int *a, int *b, int *c, int m, int n, int k, int ti
     printf("cmd b: %lld y[0] %d y[1] %d \n", y, *y, *(y+1));
     */
 
-    printf("Adding task to send queue \n");
     while(ioctl(devfd, BLOCKMMA_IOCTL_SEND_TASK, &cmd)== -1); // the ioctl func needs to return an exit code to break loop on success
     return 0;
 }
