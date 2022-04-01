@@ -22,10 +22,7 @@
 //
 ////////////////////////////////////////////////////////////////////////
 //
-//   Author:  Hung-Wei Tseng, Yu-Chia Liu
-//
-//   Description:
-//     Core of Kernel Module for CSE202's Resource Container
+//   Author:  Krishna Kabi
 //
 ////////////////////////////////////////////////////////////////////////
 
@@ -367,7 +364,7 @@ int blockmma_comp(struct blockmma_hardware_cmd __user *user_cmd)
 int blockmma_author(struct blockmma_hardware_cmd __user *user_cmd)
 {
     struct blockmma_hardware_cmd cmd;
-    char authors[] = "Krishna Kabi(kkabi004), (SID: 862255132) ; Malhar Manohar Thombare(mthom121), (SID:862259131) ; Rohit Ramesh Kumashi(rkuma069), (SID:862324644)"; 
+    char authors[] = "Krishna Kabi(kkabi004)"; 
     if (copy_from_user(&cmd, user_cmd, sizeof(cmd)))
     {
         return -1;
