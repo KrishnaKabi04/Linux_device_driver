@@ -61,7 +61,7 @@ Now, you can navigate to the library path and again use ``make`` to generate thi
 
 ## Testing
 
-Finally, in the benchmark directory, the benchmark program cab be compiled using ``make`` command. The run.sh script should be used ("source ./run.sh") in the benchmark folder to test and validate implementation. 
+Finally, in the benchmark directory, the benchmark program can be compiled using ``make`` command. The run.sh script should be used ("source ./run.sh") in the benchmark folder to test and validate implementation. 
 
 After succesfully making the files, the benchmark will contain four user programs:
 
@@ -76,7 +76,7 @@ After succesfully making the files, the benchmark will contain four user program
 For each run, the script will output the result of each running program. If you see the program output contains "Diff", it means your result is incorrect. If your matrix output is identical to CPU computation, you will see a "Passed" in the output. The accelerators will also report tasks each performed. You should expect each accelerator performs similar amount of tasks. 
 
 
-## Your tasks
+## Modules in Core:
 
 1. Implementing the blockmma kernel module: it needs the following features:
 
